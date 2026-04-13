@@ -30,3 +30,42 @@ begin
 exception
   when duplicate_object then null;
 end $$;
+
+-- 3) Trip tracking tables
+create table if not exists public.trips (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users not null,
+  vehicle_id uuid references public.vehicles on delete cascade not null,
+  started_at timestamptz not null,
+  ended_at timestamptz,
+  distance_km numeric(10,3),
+  note text,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.trip_waypoints (
+  id bigint generated always as identity primary key,
+  trip_id uuid references public.trips on delete cascade not null,
+  lat double precision not null,
+  lng double precision not null,
+  recorded_at timestamptz not null
+);
+
+alter table public.trips enable row level security;
+alter table public.trip_waypoints enable row level security;
+
+do $$
+begin
+  create policy "user_trips" on public.trips for all
+    using (user_id = auth.uid()) with check (user_id = auth.uid());
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create policy "user_trip_waypoints" on public.trip_waypoints for all
+    using (trip_id in (select id from public.trips where user_id = auth.uid()));
+exception
+  when duplicate_object then null;
+end $$;

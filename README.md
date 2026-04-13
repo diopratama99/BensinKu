@@ -1,62 +1,124 @@
-# bensinku
+# BensinKu 🚗⛽
 
-Prototype aplikasi tracking bensin (Flutter + Supabase).
+Aplikasi mobile untuk **memantau pengeluaran bahan bakar** kendaraan secara personal. Dibangun dengan Flutter dan Supabase sebagai backend.
 
-## Fitur prototype
+---
 
-- Limit kendaraan: 1 Motor + 1 Mobil (enforced di DB via UNIQUE).
-- Input pengisian pakai nominal (Rp) → liter dihitung otomatis dari `fuel_prices`.
-- 3 tab: Ringkasan / Tambah / Riwayat.
-- Harga BBM read-only di client (diubah via server/admin).
+## ✨ Fitur
 
-## Getting Started
+| Fitur | Deskripsi |
+|---|---|
+| 🏠 **Dashboard** | Ringkasan kendaraan aktif, pengisian terakhir, dan pengeluaran bulan ini |
+| ⛽ **Isi BBM** | Input pengisian BBM (nominal → liter dihitung otomatis berdasarkan harga/liter) |
+| 📊 **Statistik** | Grafik pengeluaran mingguan/bulanan/tahunan + riwayat perjalanan |
+| 📍 **Trip Tracker** | Rekam rute perjalanan secara real-time dengan GPS (OpenStreetMap) |
+| 📜 **Riwayat** | Daftar semua pengisian BBM beserta detail |
+| 👤 **Profil** | Manajemen akun dan kendaraan |
 
-### 1) Konfigurasi Supabase (self-host)
+---
 
-Panduan setup Docker + Supabase self-host ada di [server/SUPABASE_SELFHOST_GUIDE.md](server/SUPABASE_SELFHOST_GUIDE.md).
+## 🛠️ Tech Stack
 
-Jalankan SQL berikut di Supabase Studio:
+- **Framework**: Flutter (Dart)
+- **Backend**: [Supabase](https://supabase.com) (Auth + PostgreSQL + RLS)
+- **Maps**: [flutter_map](https://pub.dev/packages/flutter_map) + OpenStreetMap (gratis, tanpa API key)
+- **GPS**: [geolocator](https://pub.dev/packages/geolocator)
+- **Font**: Plus Jakarta Sans
 
-- `supabase/schema.sql`
-- `supabase/seed.sql`
+---
 
-Lalu isi tabel `fuel_prices` sesuai harga yang kamu pakai.
+## 🚀 Setup & Menjalankan
 
-### 2) Run Flutter
+### 1. Clone & Install Dependencies
 
-Cara paling simple (nggak perlu ngetik command panjang) pakai file `dart-define`:
-
-1) Copy file contoh:
-
+```bash
+git clone https://github.com/diopratama99/BensinKu.git
+cd BensinKu
+flutter pub get
 ```
+
+### 2. Setup Supabase
+
+Buat project di [supabase.com](https://supabase.com), lalu jalankan SQL di **SQL Editor**:
+
+```sql
+-- Jalankan file ini sesuai urutan:
+-- 1. supabase/schema.sql
+-- 2. supabase/upgrade_2026_04_13.sql  (tabel trips & trip_waypoints)
+```
+
+### 3. Konfigurasi environment
+
+Salin file contoh dan isi dengan credentials Supabase kamu:
+
+```bash
 cp supabase.defines.example.json supabase.defines.json
 ```
 
-2) Edit `supabase.defines.json` isi `SUPABASE_URL` dan `SUPABASE_ANON_KEY`.
+Edit `supabase.defines.json`:
 
-3) Run:
-
+```json
+{
+  "SUPABASE_URL": "https://xxxxxxxxxxxx.supabase.co",
+  "SUPABASE_ANON_KEY": "eyJ..."
+}
 ```
+
+> ⚠️ **Jangan commit `supabase.defines.json`** — sudah ada di `.gitignore`
+
+### 4. Jalankan
+
+```bash
 flutter run --dart-define-from-file=supabase.defines.json
 ```
 
-Alternatif (manual) pakai `dart-define`:
+### 5. Build APK
+
+```bash
+flutter build apk --dart-define-from-file=supabase.defines.json
+```
+
+---
+
+## 🗄️ Database Schema
 
 ```
-flutter run --dart-define=SUPABASE_URL=... \
-	--dart-define=SUPABASE_ANON_KEY=...
+users (Supabase Auth)
+├── vehicles (kendaraan per user)
+├── refuels (pengisian BBM)
+├── trips (perjalanan GPS)
+│   └── trip_waypoints (titik-titik GPS per perjalanan)
+└── fuel_prices (harga BBM aktual)
 ```
 
-Catatan:
+Lihat detail: [`supabase/schema.sql`](supabase/schema.sql)
 
-- `SUPABASE_ANON_KEY` aman di client.
-- Jangan pernah taruh `service_role` key di Flutter.
+---
 
-A few resources to get you started if this is your first Flutter project:
+## 📁 Struktur Proyek
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```
+lib/
+├── app/            # Theme & routing
+├── config/         # App config (env vars)
+├── data/           # Models & repository (Supabase queries)
+├── features/
+│   ├── auth/       # Login page
+│   ├── home/       # Dashboard, statistik, riwayat, profil
+│   ├── onboarding/ # Setup profil & kendaraan
+│   └── trip/       # GPS trip tracking + peta
+├── services/       # TripService, SupabaseBootstrap
+└── widgets/        # Reusable widgets
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+
+## 📸 Screenshot
+
+> *(Tambahkan screenshot di sini)*
+
+---
+
+## 📄 Lisensi
+
+Proyek ini dibuat untuk keperluan tugas kuliah.
