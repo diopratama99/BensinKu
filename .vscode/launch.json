@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "BensinKu (Web - Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "toolArgs": [
+        "-d",
+        "chrome",
+        "--dart-define-from-file=supabase.defines.json"
+      ]
+    },
+    {
+      "name": "BensinKu (Mobile - default device)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "toolArgs": [
+        "--dart-define-from-file=supabase.defines.json"
+      ]
+    }
+  ]
+}
