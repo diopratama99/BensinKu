@@ -1,0 +1,13 @@
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px; text-align: center;">
+  <h2 style="color: #333;">Selamat Datang di Teman Labs! 🚀</h2>
+  <p style="color: #555; font-size: 16px;">
+    Halo! Terima kasih udah daftar. Tinggal satu langkah lagi nih buat ngaktifin akun kamu.
+  </p>
+  <a href="{{ .ConfirmationURL }}" style="display: inline-block; background-color: #007bff; color: #ffffff; text-decoration: none; padding: 12px 25px; border-radius: 5px; font-weight: bold; margin-top: 20px;">
+    Verifikasi Email Saya
+  </a>
+  <p style="color: #999; font-size: 12px; margin-top: 30px;">
+    Kalau tombol di atas nggak bisa diklik, copy dan paste link ini ke browser kamu:<br>
+    <a href="{{ .ConfirmationURL }}" style="color: #007bff;">{{ .ConfirmationURL }}</a>
+  </p>
+</div>
