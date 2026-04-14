@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -49,24 +51,40 @@ class _AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<_AuthGate> {
-  late final Stream<AuthState> _authStream;
+  late final StreamSubscription<AuthState> _sub;
 
   @override
   void initState() {
     super.initState();
-    _authStream = Supabase.instance.client.auth.onAuthStateChange;
+    _sub = Supabase.instance.client.auth.onAuthStateChange.listen(_onAuth);
+  }
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
+
+  void _onAuth(AuthState data) {
+    if (!mounted) return;
+    setState(() {}); // rebuild widget tree
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final nav = Navigator.of(context, rootNavigator: true);
+      final hasSession =
+          Supabase.instance.client.auth.currentSession != null;
+      if (!hasSession) {
+        // Setelah logout: pop semua route ke root, root sudah rebuild ke SignInPage
+        nav.popUntil((r) => r.isFirst);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: _authStream,
-      builder: (context, _) {
-        final session = Supabase.instance.client.auth.currentSession;
-        if (session == null) return const SignInPage();
-        return const _RegisteredGate();
-      },
-    );
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) return const SignInPage();
+    return const _RegisteredGate();
   }
 }
 

@@ -83,10 +83,12 @@ class _EmailVerifyPageState extends State<EmailVerifyPage> {
         token: code,
         type: OtpType.signup,
       );
-      // Pop semua route ke root agar _AuthGate (StreamBuilder) bisa rebuild
-      // ke WelcomePage/HomeShell sesuai kondisi auth yang baru.
+      // verifyOTP(signup) otomatis membuat session baru.
+      // _AuthGate akan rebuild ke HomeShell/WelcomePage.
+      // Gunakan rootNavigator agar seluruh stack di-pop ke root.
       if (mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        Navigator.of(context, rootNavigator: true)
+            .popUntil((r) => r.isFirst);
       }
     } on AuthException catch (e) {
       if (mounted) {

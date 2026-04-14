@@ -116,7 +116,25 @@ lib/
 
 ##  Screenshot
 
-> *(Tambahkan screenshot di sini)*
+<p align="center">
+  <img src="Screenshot/Screenshot_20260414-142803.png" width="200"/>
+  <img src="Screenshot/Screenshot_20260414-142821.png" width="200"/>
+  <img src="Screenshot/Screenshot_20260414-142826.png" width="200"/>
+  <img src="Screenshot/Screenshot_20260414-142830.png" width="200"/>
+</p>
+
+<p align="center">
+  <img src="Screenshot/Screenshot_20260414-142834.png" width="200"/>
+  <img src="Screenshot/Screenshot_20260414-142843.png" width="200"/>
+  <img src="Screenshot/Screenshot_20260414-142858.png" width="200"/>
+  <img src="Screenshot/Screenshot_20260414-142906.png" width="200"/>
+</p>
+
+<p align="center">
+  <img src="Screenshot/Screenshot_20260414-142913.png" width="200"/>
+  <img src="Screenshot/Screenshot_20260414-142923.png" width="200"/>
+  <img src="Screenshot/Screenshot_20260414-143316.png" width="200"/>
+</p>
 
 ---
 

@@ -108,8 +108,11 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
             final hasMobil = vehicles.any((v) => v.type == VehicleType.mobil);
             final canAdd = !(hasMotor && hasMobil);
 
-            _type ??=
-                hasMotor ? (hasMobil ? null : VehicleType.mobil) : VehicleType.motor;
+            // Set default type: pilih yang belum ada. Jika keduanya sudah ada, null.
+            if (!hasMotor && !hasMobil) _type ??= VehicleType.motor;
+            if (!hasMotor && hasMobil) _type ??= VehicleType.motor;
+            if (hasMotor && !hasMobil) _type ??= VehicleType.mobil;
+            if (hasMotor && hasMobil) _type = null; // sudah penuh, tidak bisa tambah
 
             return ListView(
               padding: const EdgeInsets.all(16),

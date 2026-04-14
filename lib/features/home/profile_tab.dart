@@ -365,9 +365,8 @@ class _ProfileTabState extends State<ProfileTab> {
                         );
                         if (confirm != true) return;
                         await Supabase.instance.client.auth.signOut();
-                        // Setelah signOut, pop ke root agar _AuthGate rebuild ke SignInPage
                         if (context.mounted) {
-                          Navigator.of(context)
+                          Navigator.of(context, rootNavigator: true)
                               .popUntil((r) => r.isFirst);
                         }
                       },
