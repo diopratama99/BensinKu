@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../widgets/brand_scaffold.dart';
+import 'sign_up_page.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -47,7 +48,16 @@ class _SignInPageState extends State<SignInPage> {
         password: password,
       );
     } on AuthException catch (e) {
-      setState(() => _error = e.message);
+      final msg = e.message.toLowerCase();
+      if (msg.contains('email not confirmed')) {
+        setState(() => _error =
+            'Email belum diverifikasi. Cek inbox / spam kamu lalu klik link konfirmasi.');
+      } else if (msg.contains('invalid login') ||
+          msg.contains('invalid credentials')) {
+        setState(() => _error = 'Email atau password salah.');
+      } else {
+        setState(() => _error = e.message);
+      }
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -55,50 +65,10 @@ class _SignInPageState extends State<SignInPage> {
     }
   }
 
-  Future<void> _signUp() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    if (email.isEmpty) {
-      setState(() => _error = 'Email wajib diisi');
-      return;
-    }
-    if (password.length < 6) {
-      setState(() => _error = 'Password minimal 6 karakter');
-      return;
-    }
-
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-
-    try {
-      await Supabase.instance.client.auth.signUp(
-        email: email,
-        password: password,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Akun dibuat. Kalau email confirmation aktif, cek inbox.'),
-        ),
-      );
-    } on AuthException catch (e) {
-      final msg = e.message;
-      if (msg.contains('Error sending confirmation email')) {
-        setState(
-          () => _error =
-              'Sign up butuh email konfirmasi, tapi SMTP Supabase belum diset.\n'
-              'Untuk dev: aktifkan auto-confirm di konfigurasi GoTrue (tanpa kirim email), atau set SMTP.',
-        );
-      } else {
-        setState(() => _error = msg);
-      }
-    } catch (e) {
-      setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+  void _goToRegister() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SignUpPage()),
+    );
   }
 
   @override
@@ -230,7 +200,7 @@ class _SignInPageState extends State<SignInPage> {
                           ),
                           const SizedBox(height: 10),
                           OutlinedButton.icon(
-                            onPressed: _busy ? null : _signUp,
+                            onPressed: _goToRegister,
                             icon: const Icon(Icons.person_add_alt_1_rounded),
                             label: const Text('Buat akun baru'),
                           ),

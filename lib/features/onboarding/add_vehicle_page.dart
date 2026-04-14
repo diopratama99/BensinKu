@@ -4,7 +4,7 @@ import 'package:postgrest/postgrest.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../widgets/brand_scaffold.dart';
-import '../home/home_shell.dart';
+import 'setup_preferences_page.dart';
 
 class AddVehiclePage extends StatefulWidget {
   const AddVehiclePage({super.key, this.goHomeOnComplete = false});
@@ -64,7 +64,8 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
       if (!mounted) return;
       if (widget.goHomeOnComplete) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeShell()),
+          MaterialPageRoute(
+              builder: (_) => const SetupPreferencesPage()),
           (route) => false,
         );
       } else {

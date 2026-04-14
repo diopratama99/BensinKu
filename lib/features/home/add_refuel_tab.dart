@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -14,16 +15,15 @@ class AddRefuelTab extends StatefulWidget {
 class _AddRefuelTabState extends State<AddRefuelTab> {
   final _repo = SupabaseRepository.ofDefaultClient();
 
-  final _odometerController = TextEditingController();
   final _totalController = TextEditingController();
 
   DateTime _refuelDate = DateTime.now();
   String? _vehicleId;
   String? _fuelProductId;
-  bool _isFullTank = true;
-
   bool _saving = false;
   String? _error;
+
+  List<Vehicle> _vehicles = [];
 
   final _rupiah = NumberFormat.currency(
     locale: 'id_ID',
@@ -34,8 +34,19 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
   final _dateFmt = DateFormat('dd MMM yyyy', 'id_ID');
 
   @override
+  void initState() {
+    super.initState();
+    // Auto-select BBM favorit dari preferensi user
+    final meta =
+        Supabase.instance.client.auth.currentUser?.userMetadata;
+    final prefFuel = meta?['preferred_fuel_id'];
+    if (prefFuel is String && prefFuel.isNotEmpty) {
+      _fuelProductId = prefFuel;
+    }
+  }
+
+  @override
   void dispose() {
-    _odometerController.dispose();
     _totalController.dispose();
     super.dispose();
   }
@@ -129,6 +140,7 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
                   message: 'Tambahkan kendaraan terlebih dahulu di halaman Profil.',
                 );
               }
+              _vehicles = vehicles;
               return _buildVehicleDropdown(vehicles);
             },
           ),
@@ -328,16 +340,6 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
         child: Column(
           children: [
             TextField(
-              controller: _odometerController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Spidometer (km) (opsional)',
-                hintText: 'Contoh: 12345',
-                prefixIcon: Icon(Icons.speed_rounded),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
               controller: _totalController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
@@ -346,15 +348,7 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
                 prefixIcon: Icon(Icons.payments_rounded),
               ),
             ),
-            const SizedBox(height: 12),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _isFullTank,
-              onChanged: (value) => setState(() => _isFullTank = value),
-              title: const Text('Full tank'),
-              subtitle: const Text('Aktifkan supaya perhitungan efisiensi lebih akurat.'),
-            ),
-          ],
+      ],
         ),
       ),
     );
@@ -428,13 +422,13 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
     });
 
     try {
-      final messenger = ScaffoldMessenger.of(context);
-      final vehicleId = _vehicleId;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final vehicleId = _vehicleId;
       final fuelProductId = _fuelProductId;
       if (vehicleId == null) throw StateError('Pilih kendaraan');
       if (fuelProductId == null) throw StateError('Pilih jenis BBM');
 
-      final odometer = _parseNumber(_odometerController.text);
 
       final total = _parseNumber(_totalController.text);
       if (total == null) throw StateError('Nominal wajib diisi');
@@ -451,6 +445,21 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
       if (pricePerLiter <= 0) throw StateError('Harga per liter tidak valid');
 
       final liters = total / pricePerLiter;
+
+      // Validasi kapasitas tanki
+      final selectedVehicle = _vehicles
+          .where((v) => v.id == vehicleId)
+          .firstOrNull;
+      final tankCap = selectedVehicle?.tankCapacityLiters;
+      if (tankCap != null && liters > tankCap) {
+        throw StateError(
+          'Jumlah bensin (${liters.toStringAsFixed(2)} L) melebihi kapasitas tanki kendaraan ($tankCap L). Periksa nominal yang dimasukkan.',
+        );
+      }
+
+      // isFullTank: true jika jumlah liter ≥ 95% kapasitas tanki
+      final isFullTank = tankCap != null ? (liters / tankCap >= 0.95) : false;
+
       await _repo.createRefuel(
         vehicleId: vehicleId,
         fuelProductId: fuelProductId,
@@ -459,23 +468,19 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
           _refuelDate.month,
           _refuelDate.day,
         ),
-        odometerKm: odometer,
+        odometerKm: null,
         totalRp: total,
         pricePerLiterSnapshot: pricePerLiter,
         liters: liters,
-        isFullTank: _isFullTank,
+        isFullTank: isFullTank,
       );
 
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(content: Text('Tersimpan')),
+        const SnackBar(content: Text('Tersimpan ✓')),
       );
-
-      setState(() {
-        _odometerController.clear();
-        _totalController.clear();
-        _isFullTank = true;
-      });
+      // Tutup bottom sheet otomatis
+      navigator.pop();
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {

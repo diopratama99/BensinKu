@@ -76,6 +76,33 @@ class SupabaseRepository {
     });
   }
 
+  Future<Vehicle> updateVehicle({
+    required String id,
+    required String name,
+    required VehicleType type,
+    num? tankCapacityLiters,
+  }) async {
+    return _run(() async {
+      final Map<String, dynamic> row = await _client
+          .from('vehicles')
+          .update({
+            'vehicle_type': type.dbValue,
+            'name': name.trim().isEmpty ? type.label : name.trim(),
+            'tank_capacity_liters': tankCapacityLiters,
+          })
+          .eq('id', id)
+          .select()
+          .single();
+      return Vehicle.fromJson(row);
+    });
+  }
+
+  Future<void> deleteVehicle(String id) async {
+    return _run(() async {
+      await _client.from('vehicles').delete().eq('id', id);
+    });
+  }
+
   Future<List<FuelProduct>> listFuelProducts() async {
     return _run(() async {
       final List<dynamic> rows = await _client
@@ -230,13 +257,25 @@ class SupabaseRepository {
     });
   }
 
-  Future<List<Trip>> listTrips({String? vehicleId}) async {
+  Future<List<Trip>> listTrips({
+    String? vehicleId,
+    int? limit,
+    DateTime? since,
+  }) async {
     return _run(() async {
-      final base = _client.from('trips').select();
-      final filtered =
-          vehicleId == null ? base : base.eq('vehicle_id', vehicleId);
-      final List<dynamic> rows =
-          await filtered.order('started_at', ascending: false);
+      var query = _client
+          .from('trips')
+          .select()
+          .not('ended_at', 'is', null);
+      if (vehicleId != null) {
+        query = query.eq('vehicle_id', vehicleId);
+      }
+      if (since != null) {
+        query = query.gte('started_at', since.toUtc().toIso8601String());
+      }
+      final List<dynamic> rows = await query
+          .order('started_at', ascending: false)
+          .limit(limit ?? 1000);
       return rows
           .map((e) => Trip.fromJson(e as Map<String, dynamic>))
           .toList();

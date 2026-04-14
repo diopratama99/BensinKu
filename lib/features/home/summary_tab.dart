@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -56,16 +57,29 @@ class _SummaryTabState extends State<SummaryTab> {
 
           _vehicleId ??= vehicles.first.id;
 
-          return FutureBuilder<List<Refuel>>(
-            future: _repo.listRefuels(vehicleId: _vehicleId),
-            builder: (context, refuelsSnap) {
-              if (refuelsSnap.hasError) {
-                return _CenteredError(refuelsSnap.error.toString());
+          return FutureBuilder<(List<Refuel>, List<Trip>)>(
+            future: () async {
+              final now = DateTime.now();
+              final monthStart = DateTime(now.year, now.month, 1);
+              final results = await Future.wait([
+                _repo.listRefuels(vehicleId: _vehicleId),
+                _repo.listTrips(
+                  vehicleId: _vehicleId,
+                  since: monthStart,
+                ),
+              ]);
+              return (results[0] as List<Refuel>, results[1] as List<Trip>);
+            }(),
+            builder: (context, snap) {
+              if (snap.hasError) {
+                return _CenteredError(snap.error.toString());
               }
-              final refuels = refuelsSnap.data;
-              if (refuels == null) {
+              final data = snap.data;
+              if (data == null) {
                 return const _CenteredLoading('Memuat ringkasan...');
               }
+              final refuels = data.$1;
+              final monthTrips = data.$2;
 
               final now = DateTime.now();
               final monthStart = DateTime(now.year, now.month, 1);
@@ -90,28 +104,35 @@ class _SummaryTabState extends State<SummaryTab> {
                 (sum, r) => sum + r.liters,
               );
 
+              // GPS trip distance this month (primary)
+              final tripDistanceKm = monthTrips.fold<double>(
+                0,
+                (sum, t) => sum + (t.distanceKm ?? 0),
+              );
+
+              // Odometer-based distance (fallback)
               final fullRefuels = refuels
                   .where((r) => r.isFullTank)
                   .toList()
                 ..sort((a, b) => a.refuelDate.compareTo(b.refuelDate));
 
-              num monthDistanceSum = 0;
+              num odomDistanceSum = 0;
               for (var i = 1; i < fullRefuels.length; i++) {
                 final prev = fullRefuels[i - 1];
                 final cur = fullRefuels[i];
                 final prevOdo = prev.odometerKm;
                 final curOdo = cur.odometerKm;
                 if (prevOdo == null || curOdo == null) continue;
-
                 final dist = curOdo - prevOdo;
-                if (dist <= 0) continue;
-
+                if (dist <= 0) continue; // abaikan jika odometer salah/mundur
                 final inThisMonth = !cur.refuelDate.isBefore(monthStart) &&
                     cur.refuelDate.isBefore(nextMonth);
-                if (inThisMonth) {
-                  monthDistanceSum += dist;
-                }
+                if (inThisMonth) odomDistanceSum += dist;
               }
+
+              // Prioritas GPS; fallback odometer jika belum ada trip
+              final monthDistanceSum =
+                  tripDistanceKm > 0 ? tripDistanceKm : odomDistanceSum;
 
               final recentRefuels = refuels.take(3).toList();
               final monthName = DateFormat('MMMM yyyy', 'id_ID').format(now);
@@ -120,83 +141,6 @@ class _SummaryTabState extends State<SummaryTab> {
               return ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 children: [
-                  // ─── Header greeting ───────────────────────────────
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Row(
-                      children: [
-                        Container(
-                          height: 46,
-                          width: 46,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [cs.primary, cs.secondary],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: cs.primary.withValues(alpha: 0.22),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.local_gas_station_rounded,
-                            color: cs.onPrimary,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'BensinKu',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: -0.5,
-                                    ),
-                              ),
-                              Text(
-                                'Pantau pengeluaran BBM-mu',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(color: cs.onSurfaceVariant),
-                              ),
-                            ],
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: widget.onGoToProfile,
-                          child: Container(
-                            height: 38,
-                            width: 38,
-                            decoration: BoxDecoration(
-                              color: cs.primaryContainer,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: cs.primary.withValues(alpha: 0.25),
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.person_rounded,
-                              color: cs.primary,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
 
                   // ─── Hero spending card ─────────────────────────────
                   _HeroSpendingCard(
@@ -206,6 +150,10 @@ class _SummaryTabState extends State<SummaryTab> {
                     monthName: monthName,
                     rupiah: _rupiah,
                   ),
+                  const SizedBox(height: 14),
+
+                  // ─── Fuel prediction card ───────────────────────────
+                  _FuelPredictionCard(vehicleId: _vehicleId!),
                   const SizedBox(height: 14),
 
                   // ─── Vehicle picker (2 kolom sejajar) ──────────────
@@ -1080,6 +1028,513 @@ class _CenteredEmpty extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fuel Prediction Card
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _FuelPredictionCard extends StatelessWidget {
+  const _FuelPredictionCard({required this.vehicleId});
+  final String vehicleId;
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = SupabaseRepository.ofDefaultClient();
+    final cs = Theme.of(context).colorScheme;
+
+    return FutureBuilder<(List<Refuel>, List<Trip>)>(
+      future: () async {
+        final results = await Future.wait([
+          repo.listRefuels(vehicleId: vehicleId),
+          repo.listTrips(vehicleId: vehicleId),
+        ]);
+        return (results[0] as List<Refuel>, results[1] as List<Trip>);
+      }(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+        if (snap.hasError || snap.data == null) return const SizedBox.shrink();
+
+        final refuels = snap.data!.$1;
+        final trips = snap.data!.$2;
+
+        // Butuh minimal 1 refuel untuk tampilkan card
+        if (refuels.isEmpty) return const SizedBox.shrink();
+
+        final meta = Supabase.instance.client.auth.currentUser?.userMetadata;
+
+        // ── 1. Efisiensi km/L ──────────────────────────────────────────
+        // Gunakan data historis seluruhnya; jika belum ada GPS trip, km/L = null
+        final totalTripKm =
+            trips.fold<double>(0, (s, t) => s + (t.distanceKm ?? 0));
+        final totalLiters =
+            refuels.fold<double>(0, (s, r) => s + r.liters);
+        final kmPerLiter =
+            (totalTripKm > 0 && totalLiters > 0)
+                ? totalTripKm / totalLiters
+                : null;
+
+        // ── 2. Sisa bensin estimasi ────────────────────────────────────
+        final lastRefuel = refuels.first;
+        final kmSinceLast = trips
+            .where((t) => t.startedAt.isAfter(lastRefuel.refuelDate))
+            .fold<double>(0, (s, t) => s + (t.distanceKm ?? 0));
+
+        double remaining = 0;
+        double remainingPct = 0;
+
+        if (kmPerLiter != null) {
+          final consumed = kmSinceLast / kmPerLiter;
+          remaining = (lastRefuel.liters.toDouble() - consumed)
+              .clamp(0.0, lastRefuel.liters.toDouble());
+          remainingPct =
+              (remaining / lastRefuel.liters.toDouble()).clamp(0.0, 1.0);
+        } else {
+          // Tidak ada GPS data → perkirakan full tank jika isi penuh, 50% jika tidak
+          remainingPct = lastRefuel.isFullTank ? 1.0 : 0.5;
+          remaining = lastRefuel.liters.toDouble() * remainingPct;
+        }
+
+        // ── 3. avgDailyKm: multi-window fallback ──────────────────────
+        //
+        // Priority:
+        //   A. GPS 30 hari terakhir (data aktual terbaik)
+        //   B. GPS 90 hari terakhir
+        //   C. GPS all-time / jumlah hari sejak pertama trip
+        //   D. Preferences weekly_km / 7
+        //   E. Tidak bisa prediksi hari (null)
+        //
+        // Jika GPS dan preferences keduanya ada → weighted blend:
+        //   GPS confidence makin tinggi seiring data bertambah.
+
+        double? avgDailyKm;
+        String? dailyKmSource; // untuk tampilan confidence
+
+        if (trips.isNotEmpty) {
+          // A. 30-day window
+          final d30ago = DateTime.now().subtract(const Duration(days: 30));
+          final km30 = trips
+              .where((t) => t.startedAt.isAfter(d30ago))
+              .fold<double>(0, (s, t) => s + (t.distanceKm ?? 0));
+          if (km30 > 0) {
+            avgDailyKm = km30 / 30;
+            dailyKmSource = '30 hari';
+          }
+
+          // B. 90-day window (jika 30 hari kosong)
+          if (avgDailyKm == null || avgDailyKm <= 0) {
+            final d90ago = DateTime.now().subtract(const Duration(days: 90));
+            final km90 = trips
+                .where((t) => t.startedAt.isAfter(d90ago))
+                .fold<double>(0, (s, t) => s + (t.distanceKm ?? 0));
+            if (km90 > 0) {
+              avgDailyKm = km90 / 90;
+              dailyKmSource = '90 hari';
+            }
+          }
+
+          // C. All-time GPS / days since first trip
+          if (avgDailyKm == null || avgDailyKm <= 0) {
+            final oldest = trips.last.startedAt;
+            final daySpan =
+                DateTime.now().difference(oldest).inDays.toDouble();
+            if (totalTripKm > 0 && daySpan > 0) {
+              avgDailyKm = totalTripKm / daySpan.clamp(1, 9999);
+              dailyKmSource = 'semua data';
+            }
+          }
+        }
+
+        // D. Preferences fallback (jika GPS belum cukup)
+        final prefWeeklyKm = meta?['weekly_km'];
+        if (prefWeeklyKm is num && prefWeeklyKm > 0) {
+          final prefDaily = prefWeeklyKm / 7;
+          if (avgDailyKm == null || avgDailyKm <= 0) {
+            // Tidak ada GPS sama sekali → pakai preferences murni
+            avgDailyKm = prefDaily.toDouble();
+            dailyKmSource = 'preferensi';
+          } else {
+            // GPS ada → blend: semakin banyak data GPS, bobot GPS makin besar
+            // Jumlah trips sebagai proxy kualitas GPS data (max blend di 20 trips)
+            final gpsWeight = (trips.length / 20).clamp(0.2, 0.9);
+            avgDailyKm =
+                (avgDailyKm * gpsWeight) + (prefDaily * (1 - gpsWeight));
+            dailyKmSource = trips.length >= 10 ? 'GPS' : 'GPS+preferensi';
+          }
+        }
+
+        // ── 4. Prediksi hari & tanggal isi ulang ──────────────────────
+        double? daysLeft;
+        DateTime? predictedDate;
+
+        if (kmPerLiter != null && avgDailyKm != null && avgDailyKm > 0) {
+          final dailyCons = avgDailyKm / kmPerLiter;
+          if (dailyCons > 0 && remaining > 0) {
+            daysLeft = remaining / dailyCons;
+            predictedDate = DateTime.now()
+                .add(Duration(hours: (daysLeft * 24).round()));
+          }
+        }
+
+        // ── 5. Tentukan state warning ──────────────────────────────────
+        // Warning hanya jika bisa kalkulasi (jangan false alarm jika data kosong)
+        final hasGoodData = kmPerLiter != null && avgDailyKm != null;
+        final isWarning = hasGoodData &&
+            (remainingPct < 0.15 || (daysLeft != null && daysLeft < 2));
+        final isDataLimited = kmPerLiter == null || avgDailyKm == null;
+
+        return _PredictionCardUI(
+          cs: cs,
+          remainingLiters: remaining,
+          remainingPct: remainingPct,
+          kmPerLiter: kmPerLiter,
+          daysUntilEmpty: daysLeft,
+          predictedDate: predictedDate,
+          isWarning: isWarning,
+          isDataLimited: isDataLimited,
+          dailyKmSource: dailyKmSource,
+        );
+      },
+    );
+  }
+}
+
+class _PredictionCardUI extends StatelessWidget {
+  const _PredictionCardUI({
+    required this.cs,
+    required this.remainingLiters,
+    required this.remainingPct,
+    this.kmPerLiter,
+    this.daysUntilEmpty,
+    this.predictedDate,
+    required this.isWarning,
+    this.isDataLimited = false,
+    this.dailyKmSource,
+  });
+
+  final ColorScheme cs;
+  final double remainingLiters;
+  final double remainingPct;
+  final double? kmPerLiter;
+  final double? daysUntilEmpty;
+  final DateTime? predictedDate;
+  final bool isWarning;
+  final bool isDataLimited;
+  final String? dailyKmSource;
+
+  void _showDisclaimer(BuildContext ctx) {
+    showDialog<void>(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.info_outline_rounded,
+                color: cs.primary, size: 20),
+            const SizedBox(width: 8),
+            const Text('Tentang Prediksi Ini'),
+          ],
+        ),
+        content: Text(
+          'Estimasi ini dihitung dari beberapa sumber data secara bertahap:\n\n'
+          '⛽ Efisiensi (km/L) = total jarak GPS ÷ total liter isi bensin.\n\n'
+          '📅 Rata-rata km/hari dihitung dari:\n'
+          '   1. GPS 30 hari terakhir (prioritas)\n'
+          '   2. GPS 90 hari terakhir\n'
+          '   3. Seluruh riwayat GPS\n'
+          '   4. Preferensi awal (input manual)\n\n'
+          'Jika tersedia keduanya, data GPS dan preferensi digabung '
+          'dengan bobot: semakin banyak data GPS, semakin akurat.\n\n'
+          '⚠️ Akurasi meningkat seiring bertambahnya trip dan isi bensin. '
+          'Kondisi jalan & gaya berkendara memengaruhi hasilnya.',
+          style: const TextStyle(fontSize: 13, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('Mengerti'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final warningColor =
+        isWarning ? const Color(0xFFE53935) : cs.primary;
+    final bgColor = isWarning
+        ? const Color(0xFFFFF3F3)
+        : Colors.white.withValues(alpha: 0.92);
+    final dateStr = predictedDate != null
+        ? DateFormat('d MMM yyyy', 'id_ID').format(predictedDate!)
+        : '–';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isWarning
+              ? warningColor.withValues(alpha: 0.35)
+              : cs.outlineVariant.withValues(alpha: 0.4),
+          width: isWarning ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: warningColor.withValues(alpha: 0.07),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  height: 32,
+                  width: 32,
+                  decoration: BoxDecoration(
+                    color: isWarning
+                        ? warningColor.withValues(alpha: 0.1)
+                        : cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    isWarning
+                        ? Icons.warning_amber_rounded
+                        : Icons.local_gas_station_rounded,
+                    color: warningColor,
+                    size: 17,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isWarning
+                            ? '⚠️ Bensin Hampir Habis'
+                            : 'Prediksi Bensin',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: warningColor,
+                            ),
+                      ),
+                      if (isDataLimited)
+                        Row(
+                          children: [
+                            Icon(Icons.bar_chart_rounded,
+                                size: 11,
+                                color: cs.onSurfaceVariant
+                                    .withValues(alpha: 0.6)),
+                            const SizedBox(width: 3),
+                            Text(
+                              'Data terbatas — akurasi meningkat seiring waktu',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: cs.onSurfaceVariant
+                                    .withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ],
+                        )
+                      else if (dailyKmSource != null)
+                        Row(
+                          children: [
+                            Icon(Icons.check_circle_outline_rounded,
+                                size: 11,
+                                color: cs.primary.withValues(alpha: 0.6)),
+                            const SizedBox(width: 3),
+                            Text(
+                              'Berdasarkan $dailyKmSource',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: cs.primary.withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                // Disclaimer button
+                GestureDetector(
+                  onTap: () => _showDisclaimer(context),
+                  child: Container(
+                    height: 24,
+                    width: 24,
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest
+                          .withValues(alpha: 0.7),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.info_outline_rounded,
+                      size: 14,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            // Progress bar
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Estimasi sisa bensin',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      '${(remainingPct * 100).toStringAsFixed(0)}%  •  ${remainingLiters.toStringAsFixed(1)} L',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: warningColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    value: remainingPct,
+                    minHeight: 10,
+                    backgroundColor: cs.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(warningColor),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            // Stats row
+            Row(
+              children: [
+                _PredStat(
+                  label: 'Efisiensi',
+                  value: kmPerLiter != null
+                      ? '${kmPerLiter!.toStringAsFixed(1)} km/L'
+                      : '–',
+                  icon: Icons.speed_rounded,
+                  cs: cs,
+                ),
+                const SizedBox(width: 8),
+                _PredStat(
+                  label: 'Sisa hari',
+                  value: daysUntilEmpty != null
+                      ? '~${daysUntilEmpty!.toStringAsFixed(0)} hari'
+                      : '–',
+                  icon: Icons.hourglass_bottom_rounded,
+                  cs: cs,
+                  highlight: isWarning,
+                ),
+                const SizedBox(width: 8),
+                _PredStat(
+                  label: 'Isi lagi',
+                  value: dateStr,
+                  icon: Icons.event_rounded,
+                  cs: cs,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PredStat extends StatelessWidget {
+  const _PredStat({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.cs,
+    this.highlight = false,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final ColorScheme cs;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: highlight
+              ? const Color(0xFFE53935).withValues(alpha: 0.07)
+              : cs.surfaceContainerHighest.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(12),
+          border: highlight
+              ? Border.all(
+                  color:
+                      const Color(0xFFE53935).withValues(alpha: 0.3))
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon,
+                size: 14,
+                color: highlight
+                    ? const Color(0xFFE53935)
+                    : cs.onSurfaceVariant),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: highlight
+                    ? const Color(0xFFE53935)
+                    : cs.onSurface,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                  fontSize: 10, color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
       ),
     );
   }

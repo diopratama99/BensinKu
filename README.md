@@ -8,12 +8,13 @@ Aplikasi mobile untuk **memantau pengeluaran bahan bakar** kendaraan secara pers
 
 | Fitur | Deskripsi |
 |---|---|
-| 🏠 **Dashboard** | Ringkasan kendaraan aktif, pengisian terakhir, dan pengeluaran bulan ini |
-| ⛽ **Isi BBM** | Input pengisian BBM (nominal → liter dihitung otomatis berdasarkan harga/liter) |
-| 📊 **Statistik** | Grafik pengeluaran mingguan/bulanan/tahunan + riwayat perjalanan |
-| 📍 **Trip Tracker** | Rekam rute perjalanan secara real-time dengan GPS (OpenStreetMap) |
+| 🏠 **Dashboard** | Ringkasan kendaraan, pengisian terakhir, estimasi BBM, dan pengeluaran bulan ini |
+| 🔮 **Smart Prediction** | Kalkulasi sisa bensin cerdas dengan Fallback Multi-Window (GPS aktual + Preferensi user) |
+| ⛽ **Isi BBM** | Input pengisian BBM dengan validasi kapasitas tangki dan auto-select BBM favorit |
+| 📊 **Statistik** | Grafik pengeluaran & ringkasan jarak tempuh otomatis |
+| 📍 **Trip Tracker** | Rekam rute perjalanan secara real-time dengan GPS |
 | 📜 **Riwayat** | Daftar semua pengisian BBM beserta detail |
-| 👤 **Profil** | Manajemen akun dan kendaraan |
+| 👤 **Profil & Preferensi** | Manajemen akun, kendaraan, dan kustomisasi preferensi berkendara (estimasi km, frekuensi isi) |
 
 ---
 

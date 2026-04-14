@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../data/models.dart';
 import '../../data/repository.dart';
+import '../trip/trip_detail_page.dart';
 
 enum _Range { week, month, year }
 
@@ -32,16 +33,26 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
       onRefresh: () async => setState(() {}),
       color: cs.primary,
       backgroundColor: cs.surface,
-      child: FutureBuilder<List<Refuel>>(
-        future: _repo.listRefuels(),
+      child: FutureBuilder<(List<Refuel>, List<Trip>)>(
+        future: () async {
+          final now = DateTime.now();
+          final monthStart = DateTime(now.year, now.month, 1);
+          final results = await Future.wait([
+            _repo.listRefuels(),
+            _repo.listTrips(since: monthStart),
+          ]);
+          return (results[0] as List<Refuel>, results[1] as List<Trip>);
+        }(),
         builder: (context, snap) {
           if (snap.hasError) {
             return _Centered(text: snap.error.toString());
           }
-          final refuels = snap.data;
-          if (refuels == null) {
+          final data = snap.data;
+          if (data == null) {
             return const _Centered(loading: true);
           }
+          final refuels = data.$1;
+          final monthTrips = data.$2;
 
           final points = _buildSeries(refuels, _range);
           final total = points.fold<num>(0, (s, p) => s + p.value);
@@ -65,61 +76,6 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             children: [
-              // ─── Header ─────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      height: 46,
-                      width: 46,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [cs.primary, cs.secondary],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: cs.primary.withValues(alpha: 0.25),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.bar_chart_rounded,
-                        color: cs.onPrimary,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Statistik',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.w900),
-                          ),
-                          Text(
-                            'Analisis pengeluaran BBM-mu',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: cs.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
               // ─── Total spend hero ────────────────────────────────────
               Container(
                 padding: const EdgeInsets.all(22),
@@ -203,6 +159,10 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   ),
                 ],
               ),
+              const SizedBox(height: 14),
+
+              // ─── Statistik jarak tempuh GPS ──────────────────────────
+              _buildTripStats(context, cs, monthTrips),
               const SizedBox(height: 14),
 
               // ─── Range selector ──────────────────────────────────────
@@ -380,6 +340,155 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     );
   }
 
+  Widget _buildTripStats(
+      BuildContext context, ColorScheme cs, List<Trip> trips) {
+    final totalKm =
+        trips.fold<double>(0, (s, t) => s + (t.distanceKm ?? 0));
+    final tripCount = trips.length;
+    final avgKm = tripCount > 0 ? totalKm / tripCount : 0.0;
+    final maxKm = trips.isEmpty
+        ? 0.0
+        : trips.map((t) => t.distanceKm ?? 0.0).reduce((a, b) => a > b ? a : b);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+        boxShadow: [
+          BoxShadow(
+            color: cs.secondary.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                height: 32,
+                width: 32,
+                decoration: BoxDecoration(
+                  color: cs.secondaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.route_rounded,
+                    color: cs.secondary, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Jarak Tempuh',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Bulan Ini',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: cs.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (trips.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  children: [
+                    Icon(Icons.directions_car_outlined,
+                        size: 36,
+                        color:
+                            cs.onSurfaceVariant.withValues(alpha: 0.4)),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Belum ada perjalanan',
+                      style: TextStyle(
+                          color: cs.onSurfaceVariant, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else ...[
+            // Hero total km
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  totalKm.toStringAsFixed(2),
+                  style: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -1,
+                    color: cs.secondary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 5),
+                  child: Text(
+                    'km',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _MiniStatBox(
+                    label: 'Jumlah Trip',
+                    value: '$tripCount trip',
+                    icon: Icons.flag_rounded,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _MiniStatBox(
+                    label: 'Rata-rata/Trip',
+                    value: '${avgKm.toStringAsFixed(1)} km',
+                    icon: Icons.speed_rounded,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _MiniStatBox(
+                    label: 'Trip Terpanjang',
+                    value: '${maxKm.toStringAsFixed(1)} km',
+                    icon: Icons.emoji_events_rounded,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   List<_Point> _buildSeries(List<Refuel> all, _Range range) {
     final now = DateTime.now();
 
@@ -502,46 +611,41 @@ class _MiniStatBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            height: 38,
-            width: 38,
+            height: 34,
+            width: 34,
             decoration: BoxDecoration(
               color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: cs.primary, size: 18),
+            child: Icon(icon, color: cs.primary, size: 17),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+          const SizedBox(height: 10),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
             ),
           ),
         ],
@@ -696,89 +800,101 @@ class _TripItem extends StatelessWidget {
         ? '${duration.inMinutes}m ${duration.inSeconds % 60}s'
         : '—';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TripDetailPage(trip: trip),
+        ),
       ),
-      child: Row(
-        children: [
-          Container(
-            height: 42,
-            width: 42,
-            decoration: BoxDecoration(
-              color: trip.isActive
-                  ? cs.tertiaryContainer
-                  : cs.primaryContainer,
-              borderRadius: BorderRadius.circular(13),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(16),
+          border:
+              Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              height: 42,
+              width: 42,
+              decoration: BoxDecoration(
+                color: trip.isActive
+                    ? cs.tertiaryContainer
+                    : cs.primaryContainer,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(
+                trip.isActive
+                    ? Icons.directions_car_rounded
+                    : Icons.map_rounded,
+                color: trip.isActive ? cs.tertiary : cs.primary,
+                size: 20,
+              ),
             ),
-            child: Icon(
-              trip.isActive
-                  ? Icons.directions_car_rounded
-                  : Icons.map_rounded,
-              color: trip.isActive ? cs.tertiary : cs.primary,
-              size: 20,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    dateFmt.format(trip.startedAt),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    distText,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  dateFmt.format(trip.startedAt),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: cs.onSurfaceVariant),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  distText,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                durText,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: cs.primary,
-                ),
-              ),
-              if (trip.isActive) ...[
-                const SizedBox(height: 3),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: cs.tertiaryContainer,
-                    borderRadius: BorderRadius.circular(6),
+                  durText,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: cs.primary,
                   ),
-                  child: Text(
-                    'Aktif',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: cs.tertiary,
+                ),
+                if (trip.isActive) ...[
+                  const SizedBox(height: 3),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: cs.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Aktif',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: cs.tertiary,
+                      ),
                     ),
                   ),
-                ),
+                ] else ...[
+                  const SizedBox(height: 3),
+                  Icon(Icons.chevron_right_rounded,
+                      size: 16, color: cs.onSurfaceVariant),
+                ],
               ],
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
