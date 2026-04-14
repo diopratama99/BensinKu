@@ -1,24 +1,24 @@
-# BensinKu 🚗⛽
+# BensinKu 
 
 Aplikasi mobile untuk **memantau pengeluaran bahan bakar** kendaraan secara personal. Dibangun dengan Flutter dan Supabase sebagai backend.
 
 ---
 
-## ✨ Fitur
+## Fitur
 
 | Fitur | Deskripsi |
 |---|---|
-| 🏠 **Dashboard** | Ringkasan kendaraan, pengisian terakhir, estimasi BBM, dan pengeluaran bulan ini |
-| 🔮 **Smart Prediction** | Kalkulasi sisa bensin cerdas dengan Fallback Multi-Window (GPS aktual + Preferensi user) |
-| ⛽ **Isi BBM** | Input pengisian BBM dengan validasi kapasitas tangki dan auto-select BBM favorit |
-| 📊 **Statistik** | Grafik pengeluaran & ringkasan jarak tempuh otomatis |
-| 📍 **Trip Tracker** | Rekam rute perjalanan secara real-time dengan GPS |
-| 📜 **Riwayat** | Daftar semua pengisian BBM beserta detail |
-| 👤 **Profil & Preferensi** | Manajemen akun, kendaraan, dan kustomisasi preferensi berkendara (estimasi km, frekuensi isi) |
+|  **Dashboard** | Ringkasan kendaraan, pengisian terakhir, estimasi BBM, dan pengeluaran bulan ini |
+|  **Smart Prediction** | Kalkulasi sisa bensin cerdas dengan Fallback Multi-Window (GPS aktual + Preferensi user) |
+|  **Isi BBM** | Input pengisian BBM dengan validasi kapasitas tangki dan auto-select BBM favorit |
+|  **Statistik** | Grafik pengeluaran & ringkasan jarak tempuh otomatis |
+|  **Trip Tracker** | Rekam rute perjalanan secara real-time dengan GPS |
+|  **Riwayat** | Daftar semua pengisian BBM beserta detail |
+|  **Profil & Preferensi** | Manajemen akun, kendaraan, dan kustomisasi preferensi berkendara (estimasi km, frekuensi isi) |
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 - **Framework**: Flutter (Dart)
 - **Backend**: [Supabase](https://supabase.com) (Auth + PostgreSQL + RLS)
@@ -28,7 +28,7 @@ Aplikasi mobile untuk **memantau pengeluaran bahan bakar** kendaraan secara pers
 
 ---
 
-## 🚀 Setup & Menjalankan
+##  Setup & Menjalankan
 
 ### 1. Clone & Install Dependencies
 
@@ -81,7 +81,7 @@ flutter build apk --dart-define-from-file=supabase.defines.json
 
 ---
 
-## 🗄️ Database Schema
+##  Database Schema
 
 ```
 users (Supabase Auth)
@@ -96,7 +96,7 @@ Lihat detail: [`supabase/schema.sql`](supabase/schema.sql)
 
 ---
 
-## 📁 Struktur Proyek
+##  Struktur Proyek
 
 ```
 lib/
@@ -114,7 +114,7 @@ lib/
 
 ---
 
-## 📸 Screenshot
+##  Screenshot
 
 > *(Tambahkan screenshot di sini)*
 
