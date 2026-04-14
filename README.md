@@ -45,7 +45,8 @@ Buat project di [supabase.com](https://supabase.com), lalu jalankan SQL di **SQL
 ```sql
 -- Jalankan file ini sesuai urutan:
 -- 1. supabase/schema.sql
--- 2. supabase/upgrade_2026_04_13.sql  (tabel trips & trip_waypoints)
+-- 2. supabase/seed.sql
+-- 3. supabase/upgrade_2026_04_13.sql  (tabel trips & trip_waypoints)
 ```
 
 ### 3. Konfigurasi environment
