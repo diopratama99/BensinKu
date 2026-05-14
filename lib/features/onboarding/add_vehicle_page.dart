@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:postgrest/postgrest.dart';
 
+import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
-import '../../widgets/brand_scaffold.dart';
 import 'setup_preferences_page.dart';
 
 class AddVehiclePage extends StatefulWidget {
@@ -47,7 +47,6 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
     try {
       final type = _type;
       if (type == null) throw StateError('Pilih jenis kendaraan');
-
       if (existing.any((v) => v.type == type)) {
         throw StateError('${type.label} sudah ada (limit 1 per jenis).');
       }
@@ -64,8 +63,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
       if (!mounted) return;
       if (widget.goHomeOnComplete) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-              builder: (_) => const SetupPreferencesPage()),
+          MaterialPageRoute(builder: (_) => const SetupPreferencesPage()),
           (route) => false,
         );
       } else {
@@ -74,7 +72,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
     } on PostgrestException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = e.toString().replaceFirst('Bad state: ', ''));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -82,141 +80,223 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Vehicle')),
-      body: BrandBackdrop(
-        assetPath: 'assets/illustrations/dashboard_wave.svg',
-        topPadding: -20,
-        child: FutureBuilder<List<Vehicle>>(
-          future: _repo.listVehicles(),
-          builder: (context, snap) {
-            if (snap.hasError) {
-              return _CenteredMessage(
-                title: 'Error',
-                subtitle: snap.error.toString(),
-              );
-            }
+      backgroundColor: AppEditorial.canvas,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: FutureBuilder<List<Vehicle>>(
+        future: _repo.listVehicles(),
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return _CenteredMessage(
+              title: 'ERROR',
+              subtitle: snap.error.toString(),
+            );
+          }
 
-            final vehicles = snap.data;
-            if (vehicles == null) {
-              return const _CenteredLoading();
-            }
+          final vehicles = snap.data;
+          if (vehicles == null) {
+            return const Center(
+                child: CircularProgressIndicator(color: AppEditorial.ink));
+          }
 
-            final hasMotor = vehicles.any((v) => v.type == VehicleType.motor);
-            final hasMobil = vehicles.any((v) => v.type == VehicleType.mobil);
-            final canAdd = !(hasMotor && hasMobil);
+          final hasMotor = vehicles.any((v) => v.type == VehicleType.motor);
+          final hasMobil = vehicles.any((v) => v.type == VehicleType.mobil);
+          final canAdd = !(hasMotor && hasMobil);
 
-            // Set default type: pilih yang belum ada. Jika keduanya sudah ada, null.
-            if (!hasMotor && !hasMobil) _type ??= VehicleType.motor;
-            if (!hasMotor && hasMobil) _type ??= VehicleType.motor;
-            if (hasMotor && !hasMobil) _type ??= VehicleType.mobil;
-            if (hasMotor && hasMobil) _type = null; // sudah penuh, tidak bisa tambah
+          if (!hasMotor && !hasMobil) _type ??= VehicleType.motor;
+          if (!hasMotor && hasMobil) _type ??= VehicleType.motor;
+          if (hasMotor && !hasMobil) _type ??= VehicleType.mobil;
+          if (hasMotor && hasMobil) _type = null;
 
-            return ListView(
-              padding: const EdgeInsets.all(16),
+          return SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
               children: [
-                IntroHeroCard(
-                  title: 'Tambah Kendaraan',
-                  subtitle:
-                      'Simpan 1 motor dan 1 mobil. Isi data kendaraan agar ringkasan lebih akurat.',
-                  assetPath: 'assets/illustrations/fuel_hero.svg',
+                Row(
+                  children: [
+                    Text(
+                      widget.goHomeOnComplete
+                          ? 'STEP 02/02 · KENDARAAN'
+                          : 'TAMBAH KENDARAAN',
+                      style: AppEditorial.mono(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppEditorial.butterDeep,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 14),
-                BrandPanel(
-                  child: Column(
-                    children: [
-                      DropdownButtonFormField<VehicleType>(
-                        initialValue: _type,
-                        decoration: const InputDecoration(
-                          labelText: 'Jenis kendaraan',
-                          prefixIcon: Icon(Icons.category_rounded),
-                        ),
-                        items: [
-                          if (!hasMotor)
-                            const DropdownMenuItem(
-                              value: VehicleType.motor,
-                              child: Text('Motor'),
-                            ),
-                          if (!hasMobil)
-                            const DropdownMenuItem(
-                              value: VehicleType.mobil,
-                              child: Text('Mobil'),
-                            ),
-                        ],
-                        onChanged:
-                            canAdd ? (v) => setState(() => _type = v) : null,
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _capacityController,
-                        enabled: canAdd,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Kapasitas tanki (liter)',
-                          hintText: 'Contoh: 5 / 40',
-                          prefixIcon: Icon(Icons.water_drop_rounded),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _nameController,
-                        enabled: canAdd,
-                        decoration: const InputDecoration(
-                          labelText: 'Nama kendaraan',
-                          hintText: 'Contoh: Vario / Avanza',
-                          prefixIcon: Icon(Icons.directions_car_rounded),
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 32),
+                Text(
+                  'Tambah kendaraan harianmu.',
+                  style: AppEditorial.mono(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.5,
+                    height: 1.15,
                   ),
                 ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed:
-                      (!canAdd || _saving) ? null : () => _create(vehicles),
-                  icon: _saving
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.add_rounded),
-                  label: Text(
-                    !canAdd
-                        ? 'Limit kendaraan tercapai'
-                        : 'Simpan & Masuk Dashboard',
+                const SizedBox(height: 6),
+                Text(
+                  'Maksimal 1 motor + 1 mobil. Cukup untuk pemakaian harian.',
+                  style: AppEditorial.sans(
+                    fontSize: 13,
+                    color: AppEditorial.inkSoft,
                   ),
                 ),
+                const SizedBox(height: 28),
+                Container(height: 1, color: AppEditorial.ink),
+                const SizedBox(height: 24),
+
+                Text('JENIS', style: AppEditorial.eyebrow()),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _TypePill(
+                        label: 'MOTOR',
+                        active: _type == VehicleType.motor,
+                        disabled: hasMotor,
+                        onTap: () =>
+                            setState(() => _type = VehicleType.motor),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _TypePill(
+                        label: 'MOBIL',
+                        active: _type == VehicleType.mobil,
+                        disabled: hasMobil,
+                        onTap: () =>
+                            setState(() => _type = VehicleType.mobil),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                TextField(
+                  controller: _nameController,
+                  enabled: canAdd,
+                  style: AppEditorial.mono(
+                      fontSize: 16, fontWeight: FontWeight.w600),
+                  decoration: const InputDecoration(
+                    labelText: 'NAMA KENDARAAN',
+                    hintText: 'Vario / Avanza',
+                  ),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _capacityController,
+                  enabled: canAdd,
+                  keyboardType: TextInputType.number,
+                  style: AppEditorial.mono(
+                      fontSize: 16, fontWeight: FontWeight.w600),
+                  decoration: const InputDecoration(
+                    labelText: 'KAPASITAS TANKI',
+                    hintText: '5 atau 40',
+                    suffixText: 'L',
+                  ),
+                ),
+
                 if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Card(
-                    color: cs.errorContainer,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        _error!,
-                        style: TextStyle(color: cs.onErrorContainer),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      border:
+                          Border.all(color: AppEditorial.rust, width: 1),
+                      borderRadius:
+                          BorderRadius.circular(AppEditorial.rTiny),
+                    ),
+                    child: Text(
+                      _error!,
+                      style: AppEditorial.sans(
+                        fontSize: 12.5,
+                        color: AppEditorial.rust,
                       ),
                     ),
                   ),
                 ],
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed:
+                      (!canAdd || _saving) ? null : () => _create(vehicles),
+                  child: _saving
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppEditorial.canvas,
+                          ),
+                        )
+                      : Text(!canAdd
+                          ? 'LIMIT TERCAPAI'
+                          : 'SIMPAN & LANJUT →'),
+                ),
               ],
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 }
 
-class _CenteredLoading extends StatelessWidget {
-  const _CenteredLoading();
+class _TypePill extends StatelessWidget {
+  const _TypePill({
+    required this.label,
+    required this.active,
+    required this.disabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final bool disabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return const Center(child: CircularProgressIndicator());
+    final color = disabled
+        ? AppEditorial.inkMuted
+        : (active ? AppEditorial.canvas : AppEditorial.ink);
+    final bg = disabled
+        ? AppEditorial.cream
+        : (active ? AppEditorial.ink : AppEditorial.canvas);
+
+    return GestureDetector(
+      onTap: disabled ? null : onTap,
+      child: Container(
+        height: 56,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border.all(
+            color: disabled ? AppEditorial.hairline : AppEditorial.ink,
+            width: 1,
+          ),
+          borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+        ),
+        child: Text(
+          disabled ? '$label (ADA)' : label,
+          style: AppEditorial.mono(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: color,
+            letterSpacing: 0.6,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -230,19 +310,26 @@ class _CenteredMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w900),
+              style: AppEditorial.mono(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 8),
-            Text(subtitle, textAlign: TextAlign.center),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: AppEditorial.sans(
+                fontSize: 13,
+                color: AppEditorial.inkSoft,
+              ),
+            ),
           ],
         ),
       ),

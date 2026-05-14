@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Shown after sign-up. User enters the 6-digit OTP from their email.
+import '../../app/theme.dart';
+
 class EmailVerifyPage extends StatefulWidget {
   const EmailVerifyPage({super.key, required this.email});
 
@@ -13,11 +14,9 @@ class EmailVerifyPage extends StatefulWidget {
 }
 
 class _EmailVerifyPageState extends State<EmailVerifyPage> {
-  // 6 separate controllers for each digit box
   final List<TextEditingController> _controllers =
       List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes =
-      List.generate(6, (_) => FocusNode());
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
   bool _verifying = false;
   bool _resending = false;
@@ -35,12 +34,10 @@ class _EmailVerifyPageState extends State<EmailVerifyPage> {
     super.dispose();
   }
 
-  String get _otp =>
-      _controllers.map((c) => c.text).join();
+  String get _otp => _controllers.map((c) => c.text).join();
 
   void _onDigitChanged(int index, String value) {
     if (value.length > 1) {
-      // Paste support: spread digits across boxes
       final digits = value.replaceAll(RegExp(r'\D'), '');
       for (int i = 0; i < 6 && i < digits.length; i++) {
         _controllers[i].text = digits[i];
@@ -52,7 +49,6 @@ class _EmailVerifyPageState extends State<EmailVerifyPage> {
     if (value.isNotEmpty && index < 5) {
       _focusNodes[index + 1].requestFocus();
     }
-    // Auto-verify when all 6 filled
     if (_otp.length == 6) _verifyOtp();
   }
 
@@ -68,10 +64,9 @@ class _EmailVerifyPageState extends State<EmailVerifyPage> {
   Future<void> _verifyOtp() async {
     final code = _otp;
     if (code.length < 6) {
-      setState(() => _error = 'Masukkan 6 digit kode verifikasi');
+      setState(() => _error = 'Masukkan 6 digit kode');
       return;
     }
-
     setState(() {
       _verifying = true;
       _error = null;
@@ -83,9 +78,6 @@ class _EmailVerifyPageState extends State<EmailVerifyPage> {
         token: code,
         type: OtpType.signup,
       );
-      // verifyOTP(signup) otomatis membuat session baru.
-      // _AuthGate akan rebuild ke HomeShell/WelcomePage.
-      // Gunakan rootNavigator agar seluruh stack di-pop ke root.
       if (mounted) {
         Navigator.of(context, rootNavigator: true)
             .popUntil((r) => r.isFirst);
@@ -93,8 +85,9 @@ class _EmailVerifyPageState extends State<EmailVerifyPage> {
     } on AuthException catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.message.contains('expired') || e.message.contains('invalid')
-              ? 'Kode salah atau sudah kedaluwarsa. Kirim ulang kode.'
+          _error = e.message.contains('expired') ||
+                  e.message.contains('invalid')
+              ? 'Kode salah/kedaluwarsa.'
               : e.message;
           for (final c in _controllers) {
             c.clear();
@@ -121,7 +114,7 @@ class _EmailVerifyPageState extends State<EmailVerifyPage> {
         email: widget.email,
       );
       if (mounted) {
-        setState(() => _resendMsg = 'Kode baru dikirim ke ${widget.email}');
+        setState(() => _resendMsg = 'Kode baru dikirim.');
         for (final c in _controllers) {
           c.clear();
         }
@@ -136,222 +129,223 @@ class _EmailVerifyPageState extends State<EmailVerifyPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F8FA),
+      backgroundColor: AppEditorial.canvas,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 16),
-
-                  // Icon
-                  Container(
-                    height: 80,
-                    width: 80,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [cs.primary, cs.secondary],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: cs.primary.withValues(alpha: 0.28),
-                          blurRadius: 20,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
+                  Row(
+                    children: [
+                      Text('STEP 03 · VERIFIKASI',
+                          style: AppEditorial.mono(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppEditorial.butterDeep,
+                            letterSpacing: 0.6,
+                          )),
+                    ],
+                  ),
+                  const SizedBox(height: 60),
+                  Text(
+                    'Cek inbox.',
+                    style: AppEditorial.mono(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.5,
                     ),
-                    child: Icon(Icons.lock_open_rounded,
-                        color: cs.onPrimary, size: 38),
                   ),
-                  const SizedBox(height: 22),
-
+                  const SizedBox(height: 4),
                   Text(
-                    'Masukkan Kode Verifikasi',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w900),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Kode 6 digit dikirim ke:',
-                    style: TextStyle(
-                        color: cs.onSurfaceVariant, fontSize: 13),
-                    textAlign: TextAlign.center,
+                    'Masukkan kode 6 digit yang dikirim ke:',
+                    style: AppEditorial.sans(
+                      fontSize: 13,
+                      color: AppEditorial.inkSoft,
+                    ),
                   ),
                   const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: cs.primaryContainer,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Text(
-                      widget.email,
-                      style: TextStyle(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
+                  Text(
+                    widget.email,
+                    style: AppEditorial.mono(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppEditorial.butterDeep,
                     ),
                   ),
                   const SizedBox(height: 28),
-
-                  // ── 6-digit OTP boxes ──────────────────────────────────
+                  Container(height: 1, color: AppEditorial.ink),
+                  const SizedBox(height: 28),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: List.generate(6, (i) {
-                      return Padding(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 5),
-                        child: SizedBox(
-                          width: 46,
-                          height: 56,
-                          child: KeyboardListener(
-                            focusNode: FocusNode(),
-                            onKeyEvent: (e) => _onKeyEvent(i, e),
-                            child: TextField(
-                              controller: _controllers[i],
-                              focusNode: _focusNodes[i],
-                              keyboardType: TextInputType.number,
-                              textAlign: TextAlign.center,
-                              maxLength: i == 0 ? 6 : 1, // allow paste on first
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                color: cs.primary,
-                              ),
-                              decoration: InputDecoration(
-                                counterText: '',
-                                filled: true,
-                                fillColor: _controllers[i].text.isNotEmpty
-                                    ? cs.primaryContainer
-                                    : Colors.white,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                      color: cs.outlineVariant),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                      color: cs.primary, width: 2),
-                                ),
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                              onChanged: (v) => _onDigitChanged(i, v),
-                            ),
-                          ),
-                        ),
+                      return _OtpBox(
+                        controller: _controllers[i],
+                        focusNode: _focusNodes[i],
+                        onChanged: (v) => _onDigitChanged(i, v),
+                        onKey: (e) => _onKeyEvent(i, e),
+                        autoFocus: i == 0,
+                        allowPaste: i == 0,
                       );
                     }),
                   ),
-
-                  const SizedBox(height: 18),
-
-                  // Error
-                  if (_error != null)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: cs.errorContainer,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.error_outline_rounded,
-                              color: cs.onErrorContainer),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(_error!,
-                                style:
-                                    TextStyle(color: cs.onErrorContainer)),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  // Verify button
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _verifying ? null : _verifyOtp,
-                      style: FilledButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                      ),
-                      icon: _verifying
-                          ? const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.verified_rounded),
-                      label: Text(_verifying
-                          ? 'Memverifikasi...'
-                          : 'Verifikasi'),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Resend
-                  if (_resendMsg != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
+                  if (_error != null) ...[
+                    const SizedBox(height: 16),
+                    _ErrorBox(message: _error!),
+                  ],
+                  if (_resendMsg != null) ...[
+                    const SizedBox(height: 10),
+                    Center(
                       child: Text(
                         _resendMsg!,
-                        style: TextStyle(
-                          fontSize: 12,
+                        style: AppEditorial.sans(
+                          fontSize: 12.5,
                           color: _resendMsg!.startsWith('Gagal')
-                              ? cs.error
-                              : cs.primary,
+                              ? AppEditorial.rust
+                              : AppEditorial.sage,
                           fontWeight: FontWeight.w600,
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
-
-                  TextButton.icon(
-                    onPressed: _resending ? null : _resendCode,
-                    icon: _resending
+                  ],
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _verifying ? null : _verifyOtp,
+                    child: _verifying
                         ? const SizedBox(
-                            height: 14, width: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.refresh_rounded, size: 16),
-                    label: const Text('Kirim ulang kode'),
-                  ),
-
-                  TextButton.icon(
-                    onPressed: () =>
-                        Navigator.of(context).popUntil((r) => r.isFirst),
-                    icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                    label: const Text('Kembali ke Login'),
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppEditorial.canvas,
+                            ),
+                          )
+                        : const Text('VERIFIKASI →'),
                   ),
                   const SizedBox(height: 16),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _resending ? null : _resendCode,
+                      icon: _resending
+                          ? const SizedBox(
+                              height: 12,
+                              width: 12,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh_rounded, size: 14),
+                      label: const Text('KIRIM ULANG KODE'),
+                    ),
+                  ),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () => Navigator.of(context)
+                          .popUntil((r) => r.isFirst),
+                      icon:
+                          const Icon(Icons.arrow_back_rounded, size: 14),
+                      label: const Text('KEMBALI KE LOGIN'),
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _OtpBox extends StatelessWidget {
+  const _OtpBox({
+    required this.controller,
+    required this.focusNode,
+    required this.onChanged,
+    required this.onKey,
+    this.autoFocus = false,
+    this.allowPaste = false,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<KeyEvent> onKey;
+  final bool autoFocus;
+  final bool allowPaste;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 44,
+      height: 56,
+      child: KeyboardListener(
+        focusNode: FocusNode(),
+        onKeyEvent: onKey,
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          autofocus: autoFocus,
+          maxLength: allowPaste ? 6 : 1,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          style: AppEditorial.mono(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+          decoration: const InputDecoration(
+            counterText: '',
+            isDense: true,
+            border: UnderlineInputBorder(
+              borderSide: BorderSide(color: AppEditorial.hairline, width: 1),
+            ),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: AppEditorial.hairline, width: 1),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: AppEditorial.ink, width: 2),
+            ),
+            contentPadding: EdgeInsets.zero,
+          ),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorBox extends StatelessWidget {
+  const _ErrorBox({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppEditorial.rust, width: 1),
+        borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              color: AppEditorial.rust, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: AppEditorial.sans(
+                fontSize: 12.5,
+                color: AppEditorial.rust,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

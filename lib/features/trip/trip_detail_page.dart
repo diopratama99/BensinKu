@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 
@@ -13,9 +14,8 @@ class TripDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final repo = SupabaseRepository.ofDefaultClient();
-    final dateFmt = DateFormat('EEEE, dd MMM yyyy', 'id_ID');
+    final dateFmt = DateFormat('EEEE, d MMM yyyy', 'id_ID');
     final timeFmt = DateFormat('HH:mm', 'id_ID');
 
     final duration = trip.endedAt?.difference(trip.startedAt);
@@ -34,24 +34,28 @@ class TripDetailPage extends StatelessWidget {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F8FA),
+      backgroundColor: AppEditorial.canvas,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'Detail Perjalanan',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'DETAIL PERJALANAN',
+          style: AppEditorial.mono(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+          ),
         ),
       ),
       body: FutureBuilder<List<TripWaypoint>>(
         future: repo.getTripWaypoints(trip.id),
         builder: (context, snap) {
           final waypoints = snap.data ?? [];
-          final latLngs = waypoints
-              .map((w) => LatLng(w.lat, w.lng))
-              .toList();
+          final latLngs =
+              waypoints.map((w) => LatLng(w.lat, w.lng)).toList();
 
-          // Compute bounds if we have points
           LatLngBounds? bounds;
           if (latLngs.length >= 2) {
             bounds = LatLngBounds.fromPoints(latLngs);
@@ -63,30 +67,33 @@ class TripDetailPage extends StatelessWidget {
           return ListView(
             padding: EdgeInsets.zero,
             children: [
-              // ── Map ──────────────────────────────────────────────────
+              // Map ────────────────────────────────────────────────
               SizedBox(
-                height: 260,
+                height: 240,
                 child: snap.connectionState == ConnectionState.waiting
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppEditorial.ink),
+                      )
                     : latLngs.isEmpty
                         ? Container(
-                            color: cs.surfaceContainerHighest,
-                            child: Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.map_outlined,
-                                      size: 40,
-                                      color: cs.onSurfaceVariant
-                                          .withValues(alpha: 0.4)),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Tidak ada data rute',
-                                    style: TextStyle(
-                                        color: cs.onSurfaceVariant),
+                            color: AppEditorial.cream,
+                            alignment: Alignment.center,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.map_outlined,
+                                    size: 32,
+                                    color: AppEditorial.inkMuted),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'tidak ada data rute.',
+                                  style: AppEditorial.sans(
+                                    fontSize: 12,
+                                    color: AppEditorial.inkSoft,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           )
                         : FlutterMap(
@@ -94,8 +101,7 @@ class TripDetailPage extends StatelessWidget {
                               initialCameraFit: bounds != null
                                   ? CameraFit.bounds(
                                       bounds: bounds,
-                                      padding:
-                                          const EdgeInsets.all(32))
+                                      padding: const EdgeInsets.all(32))
                                   : null,
                               initialCenter:
                                   startPt ?? const LatLng(0, 0),
@@ -113,7 +119,7 @@ class TripDetailPage extends StatelessWidget {
                                   polylines: [
                                     Polyline(
                                       points: latLngs,
-                                      color: cs.primary,
+                                      color: AppEditorial.ink,
                                       strokeWidth: 4,
                                     ),
                                   ],
@@ -123,20 +129,22 @@ class TripDetailPage extends StatelessWidget {
                                   if (startPt != null)
                                     Marker(
                                       point: startPt,
-                                      width: 32,
-                                      height: 32,
-                                      child: _MapPin(
-                                          color: Colors.green,
-                                          icon: Icons.play_arrow_rounded),
+                                      width: 24,
+                                      height: 24,
+                                      child: _Pin(
+                                        color: AppEditorial.sage,
+                                        glyph: '▶',
+                                      ),
                                     ),
                                   if (endPt != null)
                                     Marker(
                                       point: endPt,
-                                      width: 32,
-                                      height: 32,
-                                      child: _MapPin(
-                                          color: cs.error,
-                                          icon: Icons.flag_rounded),
+                                      width: 24,
+                                      height: 24,
+                                      child: _Pin(
+                                        color: AppEditorial.rust,
+                                        glyph: '■',
+                                      ),
                                     ),
                                 ],
                               ),
@@ -144,81 +152,63 @@ class TripDetailPage extends StatelessWidget {
                           ),
               ),
 
-              // ── Stats cards ──────────────────────────────────────────
+              // Stats ────────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Date/time header
+                    Text(dateFmt.format(trip.startedAt).toUpperCase(),
+                        style: AppEditorial.eyebrow()),
+                    const SizedBox(height: 6),
                     Text(
-                      dateFmt.format(trip.startedAt),
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w900),
+                      '${timeFmt.format(trip.startedAt)}${trip.endedAt != null ? ' — ${timeFmt.format(trip.endedAt!)}' : ' — (aktif)'}',
+                      style: AppEditorial.mono(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    Text(
-                      '${timeFmt.format(trip.startedAt)}'
-                      '${trip.endedAt != null ? ' — ${timeFmt.format(trip.endedAt!)}' : ' (belum selesai)'}',
-                      style: TextStyle(
-                          color: cs.onSurfaceVariant, fontSize: 13),
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
 
-                    // Stats row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatCard(
-                            icon: Icons.straighten_rounded,
-                            label: 'Jarak',
-                            value: trip.distanceKm != null
-                                ? '${trip.distanceKm!.toStringAsFixed(2)} km'
-                                : '—',
-                            color: cs.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _StatCard(
-                            icon: Icons.timer_rounded,
-                            label: 'Durasi',
-                            value: durText,
-                            color: cs.secondary,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _StatCard(
-                            icon: Icons.location_on_rounded,
-                            label: 'Titik',
-                            value: '${waypoints.length}',
-                            color: cs.tertiary,
-                          ),
-                        ),
-                      ],
+                    const EditorialSectionHeader(
+                        index: '01', label: 'TELEMETRI'),
+                    const SizedBox(height: 12),
+                    EditorialDataRow(
+                      label: 'Jarak tempuh',
+                      value: trip.distanceKm != null
+                          ? '${trip.distanceKm!.toStringAsFixed(2)} km'
+                          : '—',
+                    ),
+                    EditorialDataRow(
+                      label: 'Durasi',
+                      value: durText,
+                    ),
+                    EditorialDataRow(
+                      label: 'Titik GPS',
+                      value: '${waypoints.length}',
+                      isLast: true,
                     ),
 
-                    if (trip.note != null &&
-                        trip.note!.isNotEmpty) ...[
-                      const SizedBox(height: 14),
+                    if (trip.note != null && trip.note!.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      const EditorialSectionHeader(
+                          index: '02', label: 'CATATAN'),
+                      const SizedBox(height: 10),
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
+                          color: AppEditorial.cream,
                           border: Border.all(
-                              color: cs.outlineVariant
-                                  .withValues(alpha: 0.4)),
+                              color: AppEditorial.hairlineSoft, width: 1),
+                          borderRadius:
+                              BorderRadius.circular(AppEditorial.rCard),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.notes_rounded,
-                                color: cs.primary, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(trip.note!)),
-                          ],
+                        child: Text(
+                          trip.note!,
+                          style: AppEditorial.sans(
+                            fontSize: 13,
+                            height: 1.5,
+                          ),
                         ),
                       ),
                     ],
@@ -233,91 +223,27 @@ class TripDetailPage extends StatelessWidget {
   }
 }
 
-class _MapPin extends StatelessWidget {
-  const _MapPin({required this.color, required this.icon});
+class _Pin extends StatelessWidget {
+  const _Pin({required this.color, required this.glyph});
   final Color color;
-  final IconData icon;
+  final String glyph;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: color,
+        border: Border.all(color: AppEditorial.canvas, width: 2),
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.4),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
-      child: Icon(icon, color: Colors.white, size: 18),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-            color: color.withValues(alpha: 0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            height: 34,
-            width: 34,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 16),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 14,
-              color: color,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+      alignment: Alignment.center,
+      child: Text(
+        glyph,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

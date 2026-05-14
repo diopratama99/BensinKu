@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../home/home_shell.dart';
 
-/// Halaman opsional setelah add_vehicle.
-/// Mengumpulkan preferensi awal user untuk meningkatkan akurasi prediksi bensin.
-/// Preferensi disimpan di Supabase user_metadata.
 class SetupPreferencesPage extends StatefulWidget {
   const SetupPreferencesPage({super.key});
 
@@ -40,7 +38,6 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(
           data: {
-            // Gabungkan dengan metadata lama agar tidak overwrite 'name'
             ...?Supabase.instance.client.auth.currentUser?.userMetadata,
             'preferred_fuel_id': _preferredFuelId,
             'weekly_km': weeklyKm,
@@ -51,7 +48,6 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
 
       if (mounted) _goHome();
     } catch (_) {
-      // Jika gagal simpan, tetap lanjut ke home (opsional)
       if (mounted) _goHome();
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -67,10 +63,8 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F8FA),
+      backgroundColor: AppEditorial.canvas,
       body: SafeArea(
         child: FutureBuilder<List<FuelProduct>>(
           future: _repo.listFuelProducts(),
@@ -78,278 +72,166 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
             final products = snap.data ?? [];
 
             return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
               children: [
+                Text('OPSIONAL · PREFERENSI',
+                    style: AppEditorial.mono(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppEditorial.butterDeep,
+                      letterSpacing: 0.6,
+                    )),
+                const SizedBox(height: 28),
+                Text(
+                  'Sedikit detail untuk prediksi yang akurat.',
+                  style: AppEditorial.mono(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.5,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Semakin lengkap data, semakin tepat prediksi waktu isi ulang dan estimasi konsumsi.',
+                  style: AppEditorial.sans(
+                    fontSize: 13,
+                    color: AppEditorial.inkSoft,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Container(height: 1, color: AppEditorial.ink),
                 const SizedBox(height: 24),
 
-                // ── Header ──────────────────────────────────────────────────
-                Container(
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [cs.primary, cs.secondary],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: cs.primary.withValues(alpha: 0.25),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            height: 44,
-                            width: 44,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Icon(Icons.tune_rounded,
-                                color: cs.onPrimary, size: 24),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text(
-                              'Setup Preferensi',
-                              style: TextStyle(
-                                color: cs.onPrimary,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline_rounded,
-                                color: cs.onPrimary.withValues(alpha: 0.9),
-                                size: 16),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Opsional — semakin detail data yang diisi, semakin akurat prediksi bensin dan perkiraan waktu isi ulang kamu.',
-                                style: TextStyle(
-                                  color:
-                                      cs.onPrimary.withValues(alpha: 0.92),
-                                  fontSize: 12,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // ── Pertanyaan 1: BBM Favorit ────────────────────────────────
-                _QuestionCard(
-                  number: '1',
-                  title: 'Biasanya isi bensin apa?',
-                  subtitle: 'Akan otomatis terpilih saat kamu isi bensin',
-                  child: products.isEmpty
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: products.map((p) {
-                            final selected = _preferredFuelId == p.id;
-                            return GestureDetector(
-                              onTap: () => setState(() =>
-                                  _preferredFuelId =
-                                      selected ? null : p.id),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 160),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: selected
-                                      ? cs.primaryContainer
-                                      : cs.surfaceContainerHighest
-                                          .withValues(alpha: 0.6),
-                                  borderRadius: BorderRadius.circular(99),
-                                  border: Border.all(
-                                    color: selected
-                                        ? cs.primary
-                                        : Colors.transparent,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: Text(
-                                  p.label,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: selected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: selected
-                                        ? cs.primary
-                                        : cs.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
+                const EditorialSectionHeader(
+                  index: '01',
+                  label: 'BBM FAVORIT',
                 ),
                 const SizedBox(height: 12),
-
-                // ── Pertanyaan 2: Jarak/minggu ───────────────────────────────
-                _QuestionCard(
-                  number: '2',
-                  title: 'Berapa km yang biasa kamu tempuh per minggu?',
-                  subtitle: 'Digunakan untuk memprediksi waktu isi ulang',
-                  child: TextField(
-                    controller: _weeklyKmCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      hintText: 'Contoh: 100',
-                      suffixText: 'km/minggu',
-                      filled: true,
-                      fillColor: cs.surfaceContainerHighest
-                          .withValues(alpha: 0.4),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                    ),
+                if (products.isEmpty)
+                  const _LoadingLine()
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: products.map((p) {
+                      final selected = _preferredFuelId == p.id;
+                      return GestureDetector(
+                        onTap: () => setState(() =>
+                            _preferredFuelId = selected ? null : p.id),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? AppEditorial.butter
+                                : AppEditorial.canvas,
+                            border: Border.all(
+                              color: selected
+                                  ? AppEditorial.ink
+                                  : AppEditorial.hairline,
+                              width: 1,
+                            ),
+                            borderRadius:
+                                BorderRadius.circular(AppEditorial.rTiny),
+                          ),
+                          child: Text(
+                            p.label,
+                            style: AppEditorial.mono(
+                              fontSize: 12,
+                              fontWeight: selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
+                const SizedBox(height: 24),
+
+                const EditorialSectionHeader(
+                  index: '02',
+                  label: 'JARAK / MINGGU',
                 ),
                 const SizedBox(height: 12),
+                TextField(
+                  controller: _weeklyKmCtrl,
+                  keyboardType: TextInputType.number,
+                  style: AppEditorial.mono(
+                      fontSize: 16, fontWeight: FontWeight.w600),
+                  decoration: const InputDecoration(
+                    hintText: 'Contoh: 100',
+                    suffixText: 'km',
+                  ),
+                ),
+                const SizedBox(height: 24),
 
-                // ── Pertanyaan 3: Frekuensi isi/minggu ──────────────────────
-                _QuestionCard(
-                  number: '3',
-                  title: 'Berapa kali biasa isi bensin per minggu?',
-                  subtitle: 'Membantu estimasi konsumsi bahan bakar',
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '${_weeklyRefuelCount.round()}× per minggu',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: cs.primary,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: cs.primaryContainer,
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                            child: Text(
-                              _weeklyRefuelCount >= 7
-                                  ? 'Setiap hari'
-                                  : _weeklyRefuelCount <= 1
-                                      ? '1× seminggu'
-                                      : '${_weeklyRefuelCount.round()}× seminggu',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: cs.primary,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
+                const EditorialSectionHeader(
+                  index: '03',
+                  label: 'FREKUENSI ISI',
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      '${_weeklyRefuelCount.round()}',
+                      style: AppEditorial.mono(
+                        fontSize: 38,
+                        fontWeight: FontWeight.w500,
+                        color: AppEditorial.butterDeep,
                       ),
-                      const SizedBox(height: 8),
-                      SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          trackHeight: 6,
-                          thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 12),
-                          overlayShape: const RoundSliderOverlayShape(
-                              overlayRadius: 22),
-                        ),
-                        child: Slider(
-                          min: 1,
-                          max: 7,
-                          divisions: 6,
-                          value: _weeklyRefuelCount,
-                          onChanged: (v) =>
-                              setState(() => _weeklyRefuelCount = v),
-                        ),
+                    ),
+                    Text(
+                      '× / minggu',
+                      style: AppEditorial.mono(
+                        fontSize: 14,
+                        color: AppEditorial.inkSoft,
                       ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('1×',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: cs.onSurfaceVariant)),
-                          Text('7×',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: cs.onSurfaceVariant)),
-                        ],
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: AppEditorial.ink,
+                    inactiveTrackColor: AppEditorial.hairline,
+                    thumbColor: AppEditorial.ink,
+                    trackHeight: 2,
+                    thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 8),
+                  ),
+                  child: Slider(
+                    min: 1,
+                    max: 7,
+                    divisions: 6,
+                    value: _weeklyRefuelCount,
+                    onChanged: (v) =>
+                        setState(() => _weeklyRefuelCount = v),
                   ),
                 ),
                 const SizedBox(height: 28),
 
-                // ── Tombol aksi ─────────────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _saving ? null : _save,
-                    icon: _saving
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.check_circle_rounded),
-                    label: Text(
-                        _saving ? 'Menyimpan...' : 'Simpan & Masuk Dashboard'),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                    ),
-                  ),
+                FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: _saving
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppEditorial.canvas,
+                          ),
+                        )
+                      : const Text('SIMPAN & MASUK DASHBOARD →'),
                 ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
+                const SizedBox(height: 12),
+                Center(
                   child: TextButton(
                     onPressed: _saving ? null : _goHome,
-                    child: const Text(
-                      'Lewati — isi nanti',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                    child: const Text('LEWATI · ISI NANTI'),
                   ),
                 ),
               ],
@@ -361,92 +243,28 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
   }
 }
 
-// ── Helper widget ────────────────────────────────────────────────────────────
-
-class _QuestionCard extends StatelessWidget {
-  const _QuestionCard({
-    required this.number,
-    required this.title,
-    required this.subtitle,
-    required this.child,
-  });
-
-  final String number;
-  final String title;
-  final String subtitle;
-  final Widget child;
+class _LoadingLine extends StatelessWidget {
+  const _LoadingLine();
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    return Row(
+      children: [
+        const SizedBox(
+          height: 14,
+          width: 14,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppEditorial.ink,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                height: 26,
-                width: 26,
-                decoration: BoxDecoration(
-                  color: cs.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    number,
-                    style: TextStyle(
-                      color: cs.onPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          child,
-        ],
-      ),
+        ),
+        const SizedBox(width: 12),
+        Text('memuat...',
+            style: AppEditorial.sans(
+              fontSize: 13,
+              color: AppEditorial.inkSoft,
+            )),
+      ],
     );
   }
 }

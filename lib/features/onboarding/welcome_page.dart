@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../widgets/brand_scaffold.dart';
+import '../../app/theme.dart';
 import 'setup_profile_page.dart';
 
 class WelcomePage extends StatelessWidget {
@@ -8,104 +8,155 @@ class WelcomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      body: BrandBackdrop(
-        assetPath: 'assets/illustrations/dashboard_wave.svg',
-        child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-            children: [
-              IntroHeroCard(
-                title: 'Selamat Datang di BensinKu',
-                subtitle:
-                    'Catat pengisian lebih cepat, lihat pengeluaran lebih jelas, dan kelola kendaraan dalam satu tempat.',
-                assetPath: 'assets/illustrations/fuel_hero.svg',
+      backgroundColor: AppEditorial.canvas,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+          children: [
+            Row(
+              children: [
+                Text('BENSINKU',
+                    style: AppEditorial.mono(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                    )),
+                const SizedBox(width: 10),
+                Container(
+                  width: 4,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: AppEditorial.butter,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text('VOL.00 · WELCOME',
+                    style: AppEditorial.eyebrow()),
+              ],
+            ),
+            const SizedBox(height: 60),
+            Text(
+              'Pantau bensinmu.',
+              style: AppEditorial.mono(
+                fontSize: 36,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.8,
+                height: 1.05,
               ),
-              const SizedBox(height: 14),
-              BrandPanel(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Kenapa BensinKu?',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.copyWith(fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 10),
-                    _Bullet(text: 'Input nominal cepat, liter dihitung otomatis'),
-                    const SizedBox(height: 10),
-                    _Bullet(text: 'Limit 1 motor + 1 mobil, tetap simpel'),
-                    const SizedBox(height: 10),
-                    _Bullet(text: 'Harga BBM sinkron dari server admin'),
-                    const SizedBox(height: 10),
-                    _Bullet(text: 'Riwayat dan analytics siap dipantau'),
-                    const SizedBox(height: 18),
-                    FilledButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const SetupProfilePage(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.bolt_rounded),
-                      label: const Text('Mulai Sekarang'),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Flow aplikasi tetap sama, hanya tampilannya lebih modern.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                  ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Pengeluaran bensin tahun ini, dirangkum jadi catatan harian yang ringkas.',
+              style: AppEditorial.sans(
+                fontSize: 14,
+                color: AppEditorial.inkSoft,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 32),
+            Container(height: 1, color: AppEditorial.ink),
+            const SizedBox(height: 24),
+
+            const _Pillar(
+              index: '01',
+              title: 'CATAT LEBIH CEPAT',
+              body:
+                  'Input nominal saja. Liter dihitung otomatis dari harga aktual hari itu.',
+            ),
+            const SizedBox(height: 22),
+            Container(height: 1, color: AppEditorial.hairline),
+            const SizedBox(height: 22),
+            const _Pillar(
+              index: '02',
+              title: 'LIHAT PENGELUARAN',
+              body:
+                  'Riwayat dan analytics jalan di latar. Buka kapan saja.',
+            ),
+            const SizedBox(height: 22),
+            Container(height: 1, color: AppEditorial.hairline),
+            const SizedBox(height: 22),
+            const _Pillar(
+              index: '03',
+              title: 'SATU MOTOR, SATU MOBIL',
+              body:
+                  'Limit by design. Fokus pada kendaraan harian, bukan armada.',
+            ),
+            const SizedBox(height: 40),
+            FilledButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SetupProfilePage(),
                 ),
               ),
-            ],
-          ),
+              child: const Text('MULAI SEKARANG →'),
+            ),
+            const SizedBox(height: 14),
+            Center(
+              child: Text(
+                'flow tetap sama, tampilan baru.',
+                style: AppEditorial.sans(
+                  fontSize: 11.5,
+                  color: AppEditorial.inkMuted,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _Bullet extends StatelessWidget {
-  const _Bullet({required this.text});
-
-  final String text;
+class _Pillar extends StatelessWidget {
+  const _Pillar({
+    required this.index,
+    required this.title,
+    required this.body,
+  });
+  final String index;
+  final String title;
+  final String body;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          margin: const EdgeInsets.only(top: 3),
-          height: 22,
-          width: 22,
-          decoration: BoxDecoration(
-            color: cs.primaryContainer,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            Icons.check_rounded,
-            size: 15,
-            color: cs.onPrimaryContainer,
+        SizedBox(
+          width: 48,
+          child: Text(
+            index,
+            style: AppEditorial.mono(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: AppEditorial.butterDeep,
+            ),
           ),
         ),
-        const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodyMedium,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppEditorial.mono(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                body,
+                style: AppEditorial.sans(
+                  fontSize: 13,
+                  color: AppEditorial.inkSoft,
+                  height: 1.5,
+                ),
+              ),
+            ],
           ),
         ),
       ],

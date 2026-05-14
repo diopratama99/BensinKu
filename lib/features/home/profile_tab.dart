@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
-import '../../widgets/vehicle_icon.dart';
 import '../onboarding/add_vehicle_page.dart';
 import 'vehicle_detail_page.dart';
 
+/// Profile — index card layout.
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
 
@@ -19,7 +20,6 @@ class _ProfileTabState extends State<ProfileTab> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final user = Supabase.instance.client.auth.currentUser;
     final raw = user?.userMetadata?['name'];
     final name = raw is String ? raw.trim() : '';
@@ -34,461 +34,212 @@ class _ProfileTabState extends State<ProfileTab> {
             .join();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F8FA),
+      backgroundColor: AppEditorial.canvas,
+      appBar: Navigator.of(context).canPop()
+          ? AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              title: Text('PROFIL',
+                  style: AppEditorial.mono(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
+                  )),
+            )
+          : null,
       body: RefreshIndicator(
         onRefresh: () async => setState(() {}),
-        color: cs.primary,
-        backgroundColor: cs.surface,
-        child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            children: [
-              // ─── Header ─────────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Row(
-                  children: [
-                    // Back button jika dipush sebagai route
-                    if (Navigator.of(context).canPop()) ...[
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: Container(
-                          height: 38,
-                          width: 38,
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.arrow_back_rounded,
-                              color: cs.primary, size: 18),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                    ] else ...[
-                      Container(
-                        height: 46,
-                        width: 46,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [cs.primary, cs.secondary],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: cs.primary.withValues(alpha: 0.25),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Icon(Icons.person_rounded,
-                            color: cs.onPrimary, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Profil',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.w900),
-                          ),
-                          Text(
-                            'Kelola akun dan kendaraanmu',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: cs.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ─── User identity card ────────────────────────────────────
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [cs.primary, cs.secondary],
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: cs.primary.withValues(alpha: 0.28),
-                      blurRadius: 24,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      height: 64,
-                      width: 64,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.4),
-                          width: 2,
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          initials,
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: cs.onPrimary,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name.isEmpty ? 'Pengguna' : name,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: cs.onPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            email.isEmpty ? '—' : email,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onPrimary.withValues(alpha: 0.8),
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // ─── Vehicles section ──────────────────────────────────────
-              FutureBuilder<List<Vehicle>>(
-                future: _repo.listVehicles(),
-                builder: (context, snap) {
-                  if (snap.hasError) {
-                    return _ErrorCard(message: snap.error.toString());
-                  }
-                  final vehicles = snap.data;
-                  if (vehicles == null) {
-                    return const _LoadingCard();
-                  }
-
-                  return Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(
-                        color: cs.outlineVariant.withValues(alpha: 0.4),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: cs.primary.withValues(alpha: 0.06),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              height: 38,
-                              width: 38,
-                              decoration: BoxDecoration(
-                                color: cs.secondaryContainer,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.directions_car_rounded,
-                                color: cs.secondary,
-                                size: 18,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Kendaraanku',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              ),
-                            ),
-                            FilledButton.tonal(
-                              onPressed: () async {
-                                await Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => const AddVehiclePage(),
-                                  ),
-                                );
-                                if (!mounted) return;
-                                setState(() {});
-                              },
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                                minimumSize: Size.zero,
-                                tapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: const Text('+ Tambah',
-                                  style: TextStyle(fontSize: 12)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        if (vehicles.isEmpty)
-                          Padding(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 8),
-                            child: Text(
-                              'Belum ada kendaraan yang ditambahkan.',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(color: cs.onSurfaceVariant),
-                              textAlign: TextAlign.center,
-                            ),
-                          )
-                        else
-                          ...vehicles.map(
-                            (v) => _VehicleItem(vehicle: v),
-                          ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 14),
-
-              // ─── Logout section ────────────────────────────────────────
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: cs.errorContainer.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: cs.error.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          height: 38,
-                          width: 38,
-                          decoration: BoxDecoration(
-                            color: cs.errorContainer,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.logout_rounded,
-                            color: cs.error,
-                            size: 18,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Keluar',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              Text(
-                                'Logout dari akun BensinKu',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: cs.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Keluar dari Akun?'),
-                            content: const Text(
-                                'Kamu akan logout dari BensinKu.'),
-                            actions: [
-                              TextButton(
-                                onPressed: () =>
-                                    Navigator.of(ctx).pop(false),
-                                child: const Text('Batal'),
-                              ),
-                              FilledButton(
-                                onPressed: () =>
-                                    Navigator.of(ctx).pop(true),
-                                child: const Text('Keluar'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirm != true) return;
-                        await Supabase.instance.client.auth.signOut();
-                        if (context.mounted) {
-                          Navigator.of(context, rootNavigator: true)
-                              .popUntil((r) => r.isFirst);
-                        }
-                      },
-                      icon: Icon(Icons.logout_rounded,
-                          size: 16, color: cs.error),
-                      label: Text(
-                        'Keluar dari Akun',
-                        style: TextStyle(
-                            color: cs.error, fontWeight: FontWeight.w700),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side:
-                            BorderSide(color: cs.error.withValues(alpha: 0.5)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              // ─── Preferensi Berkendara ───────────────────────────────────
-              _PreferencesCard(onEdit: () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const _PreferencesEditPage(),
-                  ),
-                );
-                setState(() {}); // Refresh setelah edit
-              }),
-              const SizedBox(height: 18),
-
-              // ─── Footer ───────────────────────────────────────────────
-              Center(
-                child: Text(
-                  'BensinKu • v1.0.0',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VehicleItem extends StatelessWidget {
-  const _VehicleItem({required this.vehicle});
-
-  final Vehicle vehicle;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isMotor = vehicle.type == VehicleType.motor;
-
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => VehicleDetailPage(vehicle: vehicle),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isMotor
-              ? cs.primaryContainer.withValues(alpha: 0.5)
-              : cs.secondaryContainer.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isMotor
-                ? cs.primary.withValues(alpha: 0.2)
-                : cs.secondary.withValues(alpha: 0.2),
-          ),
-        ),
-        child: Row(
+        color: AppEditorial.ink,
+        backgroundColor: AppEditorial.canvas,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 80),
           children: [
+            // Identity card
             Container(
-              height: 42,
-              width: 42,
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               decoration: BoxDecoration(
-                color: isMotor ? cs.primaryContainer : cs.secondaryContainer,
-                borderRadius: BorderRadius.circular(12),
+                color: AppEditorial.cream,
+                border:
+                    Border.all(color: AppEditorial.hairlineSoft, width: 1),
+                borderRadius: BorderRadius.circular(AppEditorial.rCard),
               ),
-              child: VehicleIcon(type: vehicle.type),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(
-                    vehicle.name,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                  Container(
+                    height: 64,
+                    width: 64,
+                    decoration: BoxDecoration(
+                      color: AppEditorial.butter,
+                      border: Border.all(
+                          color: AppEditorial.ink, width: 1.5),
+                      borderRadius:
+                          BorderRadius.circular(AppEditorial.rTiny),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      initials,
+                      style: AppEditorial.mono(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${vehicle.type.label} • ${vehicle.tankCapacityLiters == null ? '— L tank' : '${vehicle.tankCapacityLiters} L tank'}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: cs.onSurfaceVariant,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('PEMILIK', style: AppEditorial.eyebrow()),
+                        const SizedBox(height: 4),
+                        Text(
+                          name.isEmpty ? 'Pengguna' : name,
+                          style: AppEditorial.mono(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          email.isEmpty ? '—' : email,
+                          style: AppEditorial.sans(
+                            fontSize: 12,
+                            color: AppEditorial.inkSoft,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: cs.onSurfaceVariant,
-              size: 20,
+            const SizedBox(height: 28),
+
+            // §01 Kendaraan
+            FutureBuilder<List<Vehicle>>(
+              future: _repo.listVehicles(),
+              builder: (context, snap) {
+                if (snap.hasError) {
+                  return _ErrorBox(message: snap.error.toString());
+                }
+                final vehicles = snap.data;
+                if (vehicles == null) return const _LoadingLine();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    EditorialSectionHeader(
+                      index: '01',
+                      label: 'KENDARAAN',
+                      trailing: GestureDetector(
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AddVehiclePage(),
+                            ),
+                          );
+                          if (!mounted) return;
+                          setState(() {});
+                        },
+                        child: Text('+ TAMBAH',
+                            style: AppEditorial.eyebrow(
+                                color: AppEditorial.ink)),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (vehicles.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'belum ada kendaraan.',
+                          style: AppEditorial.sans(
+                            fontSize: 13,
+                            color: AppEditorial.inkSoft,
+                          ),
+                        ),
+                      )
+                    else
+                      ...vehicles.asMap().entries.map(
+                            (e) => _VehicleEntry(
+                              vehicle: e.value,
+                              isLast: e.key == vehicles.length - 1,
+                            ),
+                          ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+
+            // §02 Preferensi
+            _PreferencesBlock(
+              onEdit: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const _PreferencesEditPage()),
+                );
+                if (!mounted) return;
+                setState(() {});
+              },
+            ),
+            const SizedBox(height: 24),
+
+            // §03 Akun
+            const EditorialSectionHeader(index: '03', label: 'AKUN'),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: Text('Keluar dari akun?',
+                        style: AppEditorial.mono(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        )),
+                    content: const Text('Sesi akan dihapus.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: const Text('BATAL'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppEditorial.rust,
+                        ),
+                        child: const Text('KELUAR'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm != true) return;
+                await Supabase.instance.client.auth.signOut();
+                if (context.mounted) {
+                  Navigator.of(context, rootNavigator: true)
+                      .popUntil((r) => r.isFirst);
+                }
+              },
+              icon: const Icon(Icons.logout_rounded,
+                  size: 16, color: AppEditorial.rust),
+              label: const Text('KELUAR DARI AKUN',
+                  style: TextStyle(color: AppEditorial.rust)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppEditorial.rust, width: 1),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Center(
+              child: Text(
+                'BENSINKU · v1.0.0',
+                style: AppEditorial.mono(
+                  fontSize: 10.5,
+                  color: AppEditorial.inkMuted,
+                  letterSpacing: 0.6,
+                ),
+              ),
             ),
           ],
         ),
@@ -497,237 +248,199 @@ class _VehicleItem extends StatelessWidget {
   }
 }
 
-class _LoadingCard extends StatelessWidget {
-  const _LoadingCard();
+class _VehicleEntry extends StatelessWidget {
+  const _VehicleEntry({required this.vehicle, required this.isLast});
+  final Vehicle vehicle;
+  final bool isLast;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        children: [
-          CircularProgressIndicator(color: cs.primary, strokeWidth: 2),
-          const SizedBox(width: 14),
-          const Text('Memuat kendaraan...'),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.errorContainer.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.error.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.error_outline_rounded, color: cs.error, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(color: cs.onErrorContainer, fontSize: 13),
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => VehicleDetailPage(vehicle: vehicle),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isLast ? Colors.transparent : AppEditorial.hairline,
+              width: 1,
             ),
           ),
-        ],
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 60,
+              child: Text(
+                vehicle.type == VehicleType.motor ? 'MOTOR' : 'MOBIL',
+                style: AppEditorial.eyebrow(),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    vehicle.name,
+                    style: AppEditorial.mono(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    vehicle.tankCapacityLiters == null
+                        ? 'tanki belum diatur'
+                        : 'tanki ${vehicle.tankCapacityLiters} L',
+                    style: AppEditorial.sans(
+                      fontSize: 11.5,
+                      color: AppEditorial.inkSoft,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_rounded,
+                color: AppEditorial.ink, size: 16),
+          ],
+        ),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Preferences Card (profile_tab)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PreferencesCard extends StatelessWidget {
-  const _PreferencesCard({required this.onEdit});
+class _PreferencesBlock extends StatelessWidget {
+  const _PreferencesBlock({required this.onEdit});
   final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final meta =
-        Supabase.instance.client.auth.currentUser?.userMetadata;
+    final meta = Supabase.instance.client.auth.currentUser?.userMetadata;
     final weeklyKm = meta?['weekly_km'];
     final weeklyCount = meta?['weekly_refuel_count'];
     final prefFuelId = meta?['preferred_fuel_id'];
+    final hasPrefs =
+        weeklyKm != null || weeklyCount != null || prefFuelId != null;
 
-    final hasPrefs = weeklyKm != null || weeklyCount != null || prefFuelId != null;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20),
-        border:
-            Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 12, 0),
-            child: Row(
-              children: [
-                Container(
-                  height: 36,
-                  width: 36,
-                  decoration: BoxDecoration(
-                    color: cs.tertiaryContainer,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child:
-                      Icon(Icons.tune_rounded, color: cs.tertiary, size: 18),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'Preferensi Berkendara',
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                IconButton(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_rounded, size: 18),
-                  tooltip: 'Edit',
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
-            child: hasPrefs
-                ? Column(
-                    children: [
-                      if (weeklyKm is num)
-                        _PrefRow(
-                          icon: Icons.route_rounded,
-                          label: 'Jarak per minggu',
-                          value: '${weeklyKm.toStringAsFixed(0)} km',
-                        ),
-                      if (weeklyKm is num && weeklyCount is num)
-                        const SizedBox(height: 8),
-                      if (weeklyCount is num)
-                        _PrefRow(
-                          icon: Icons.local_gas_station_rounded,
-                          label: 'Frekuensi isi',
-                          value: '${weeklyCount.round()}× per minggu',
-                        ),
-                      if ((weeklyKm is num || weeklyCount is num) &&
-                          prefFuelId != null)
-                        const SizedBox(height: 8),
-                      if (prefFuelId != null)
-                        _PrefRow(
-                          icon: Icons.water_drop_rounded,
-                          label: 'BBM favorit',
-                          value: 'Terpilih',
-                        ),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded,
-                          size: 14,
-                          color:
-                              cs.onSurfaceVariant.withValues(alpha: 0.7)),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'Belum ada preferensi. Isi sekarang untuk prediksi yang lebih akurat.',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurfaceVariant),
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PrefRow extends StatelessWidget {
-  const _PrefRow(
-      {required this.icon,
-      required this.label,
-      required this.value});
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(icon, size: 15, color: cs.tertiary),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(label,
-              style:
-                  TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+        EditorialSectionHeader(
+          index: '02',
+          label: 'PREFERENSI',
+          trailing: GestureDetector(
+            onTap: onEdit,
+            child: Text('EDIT',
+                style:
+                    AppEditorial.eyebrow(color: AppEditorial.ink)),
+          ),
         ),
-        Text(value,
-            style: const TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        if (!hasPrefs)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'belum diatur. isi untuk prediksi yang akurat.',
+              style: AppEditorial.sans(
+                fontSize: 13,
+                color: AppEditorial.inkSoft,
+              ),
+            ),
+          )
+        else
+          Column(
+            children: [
+              if (weeklyKm is num)
+                EditorialDataRow(
+                  label: 'Jarak per minggu',
+                  value: '${weeklyKm.toStringAsFixed(0)} km',
+                ),
+              if (weeklyCount is num)
+                EditorialDataRow(
+                  label: 'Frekuensi isi',
+                  value: '${weeklyCount.round()}× / minggu',
+                ),
+              if (prefFuelId != null)
+                const EditorialDataRow(
+                  label: 'BBM favorit',
+                  value: 'TERPILIH',
+                  isLast: true,
+                ),
+            ],
+          ),
       ],
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Edit preferences page — wrap SetupPreferencesPage without full onboarding nav
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PreferencesEditPage extends StatelessWidget {
-  const _PreferencesEditPage();
+class _LoadingLine extends StatelessWidget {
+  const _LoadingLine();
 
   @override
   Widget build(BuildContext context) {
-    // Reuse SetupPreferencesPage dalam mode edit:
-    // tombol Simpan & Lewati akan pushAndRemoveUntil ke HomeShell,
-    // tapi dari sini kita push sebagai route biasa — jadi back button tetap ada.
-    // Untuk menghindari navigasi ke HomeShell dari dalam sini,
-    // kita bungkus dengan WillPopScope dan intercept navigasi.
-    return const _EditPreferencesWrapper();
+    return Row(
+      children: [
+        const SizedBox(
+          height: 14,
+          width: 14,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppEditorial.ink,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text('memuat...',
+            style: AppEditorial.sans(
+              fontSize: 13,
+              color: AppEditorial.inkSoft,
+            )),
+      ],
+    );
   }
 }
 
-class _EditPreferencesWrapper extends StatefulWidget {
-  const _EditPreferencesWrapper();
+class _ErrorBox extends StatelessWidget {
+  const _ErrorBox({required this.message});
+  final String message;
 
   @override
-  State<_EditPreferencesWrapper> createState() =>
-      _EditPreferencesWrapperState();
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppEditorial.rust, width: 1),
+        borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+      ),
+      child: Text(
+        message,
+        style: AppEditorial.sans(
+          fontSize: 13,
+          color: AppEditorial.rust,
+        ),
+      ),
+    );
+  }
 }
 
-class _EditPreferencesWrapperState
-    extends State<_EditPreferencesWrapper> {
+// ─────────────────────────────────────────────────────────────────────────────
+// Preferences edit page
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PreferencesEditPage extends StatefulWidget {
+  const _PreferencesEditPage();
+
+  @override
+  State<_PreferencesEditPage> createState() =>
+      _PreferencesEditPageState();
+}
+
+class _PreferencesEditPageState extends State<_PreferencesEditPage> {
   final _repo = SupabaseRepository.ofDefaultClient();
   final _weeklyKmCtrl = TextEditingController();
 
@@ -738,8 +451,7 @@ class _EditPreferencesWrapperState
   @override
   void initState() {
     super.initState();
-    final meta =
-        Supabase.instance.client.auth.currentUser?.userMetadata;
+    final meta = Supabase.instance.client.auth.currentUser?.userMetadata;
     final wk = meta?['weekly_km'];
     final wrc = meta?['weekly_refuel_count'];
     final pf = meta?['preferred_fuel_id'];
@@ -773,8 +485,7 @@ class _EditPreferencesWrapperState
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Preferensi disimpan ✓')),
+          const SnackBar(content: Text('Tersimpan ✓')),
         );
         Navigator.of(context).pop();
       }
@@ -787,285 +498,149 @@ class _EditPreferencesWrapperState
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F8FA),
+      backgroundColor: AppEditorial.canvas,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF2F8FA),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        title: const Text('Edit Preferensi',
-            style: TextStyle(fontWeight: FontWeight.w800)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'EDIT PREFERENSI',
+          style: AppEditorial.mono(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+          ),
+        ),
       ),
       body: FutureBuilder<List<FuelProduct>>(
         future: _repo.listFuelProducts(),
         builder: (context, snap) {
           final products = snap.data ?? [];
           return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
             children: [
-              // Disclaimer
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                      color: cs.primary.withValues(alpha: 0.2)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded,
-                        color: cs.primary, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Semakin detail, prediksi bensin makin akurat.',
-                        style: TextStyle(
+              const EditorialSectionHeader(
+                index: '01',
+                label: 'BBM FAVORIT',
+              ),
+              const SizedBox(height: 12),
+              if (products.isEmpty)
+                const _LoadingLine()
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: products.map((p) {
+                    final selected = _preferredFuelId == p.id;
+                    return GestureDetector(
+                      onTap: () => setState(() => _preferredFuelId =
+                          selected ? null : p.id),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? AppEditorial.butter
+                              : AppEditorial.canvas,
+                          border: Border.all(
+                            color: selected
+                                ? AppEditorial.ink
+                                : AppEditorial.hairline,
+                            width: 1,
+                          ),
+                          borderRadius:
+                              BorderRadius.circular(AppEditorial.rTiny),
+                        ),
+                        child: Text(
+                          p.label,
+                          style: AppEditorial.mono(
                             fontSize: 12,
-                            color: cs.primary,
-                            fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // BBM Favorit
-              _QuestionSection(
-                number: '1',
-                title: 'BBM favorit kamu',
-                subtitle: 'Auto-select saat isi bensin',
-                child: products.isEmpty
-                    ? const _LoadingItem()
-                    : Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: products.map((p) {
-                          final sel = _preferredFuelId == p.id;
-                          return GestureDetector(
-                            onTap: () => setState(() =>
-                                _preferredFuelId = sel ? null : p.id),
-                            child: AnimatedContainer(
-                              duration:
-                                  const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: sel
-                                    ? cs.primaryContainer
-                                    : cs.surfaceContainerHighest
-                                        .withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(99),
-                                border: Border.all(
-                                  color: sel
-                                      ? cs.primary
-                                      : Colors.transparent,
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: Text(
-                                p.label,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: sel
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: sel
-                                      ? cs.primary
-                                      : cs.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-              ),
-              const SizedBox(height: 12),
-
-              // km/minggu
-              _QuestionSection(
-                number: '2',
-                title: 'Jarak per minggu',
-                subtitle: 'Fallback prediksi jika belum ada GPS trip',
-                child: TextField(
-                  controller: _weeklyKmCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    hintText: 'Contoh: 100',
-                    suffixText: 'km/minggu',
-                    filled: true,
-                    fillColor: cs.surfaceContainerHighest
-                        .withValues(alpha: 0.4),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Frekuensi isi
-              _QuestionSection(
-                number: '3',
-                title: 'Frekuensi isi per minggu',
-                subtitle: 'Estimasi konsumsi bahan bakar',
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${_weeklyRefuelCount.round()}×',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            color: cs.primary,
+                            fontWeight:
+                                selected ? FontWeight.w700 : FontWeight.w500,
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer,
-                            borderRadius: BorderRadius.circular(99),
-                          ),
-                          child: Text(
-                            '${_weeklyRefuelCount.round()}× seminggu',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: cs.primary,
-                                fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Slider(
-                      min: 1,
-                      max: 7,
-                      divisions: 6,
-                      value: _weeklyRefuelCount,
-                      onChanged: (v) =>
-                          setState(() => _weeklyRefuelCount = v),
-                    ),
-                  ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              const SizedBox(height: 28),
+              const EditorialSectionHeader(
+                  index: '02', label: 'JARAK / MINGGU'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _weeklyKmCtrl,
+                keyboardType: TextInputType.number,
+                style: AppEditorial.mono(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: const InputDecoration(
+                  hintText: 'Contoh: 100',
+                  suffixText: 'km',
                 ),
               ),
-              const SizedBox(height: 24),
-
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _saving ? null : _save,
-                  icon: _saving
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white))
-                      : const Icon(Icons.save_rounded),
-                  label:
-                      Text(_saving ? 'Menyimpan...' : 'Simpan Preferensi'),
-                  style: FilledButton.styleFrom(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+              const SizedBox(height: 28),
+              const EditorialSectionHeader(
+                  index: '03', label: 'FREKUENSI ISI'),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    '${_weeklyRefuelCount.round()}',
+                    style: AppEditorial.mono(
+                      fontSize: 38,
+                      fontWeight: FontWeight.w500,
+                      color: AppEditorial.butterDeep,
+                    ),
                   ),
+                  Text(
+                    '× / minggu',
+                    style: AppEditorial.mono(
+                      fontSize: 14,
+                      color: AppEditorial.inkSoft,
+                    ),
+                  ),
+                ],
+              ),
+              SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  activeTrackColor: AppEditorial.ink,
+                  inactiveTrackColor: AppEditorial.hairline,
+                  thumbColor: AppEditorial.ink,
+                  trackHeight: 2,
+                  thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 8),
                 ),
+                child: Slider(
+                  min: 1,
+                  max: 7,
+                  divisions: 6,
+                  value: _weeklyRefuelCount,
+                  onChanged: (v) =>
+                      setState(() => _weeklyRefuelCount = v),
+                ),
+              ),
+              const SizedBox(height: 32),
+              FilledButton(
+                onPressed: _saving ? null : _save,
+                child: _saving
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppEditorial.canvas,
+                        ),
+                      )
+                    : const Text('SIMPAN PREFERENSI →'),
               ),
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-class _QuestionSection extends StatelessWidget {
-  const _QuestionSection({
-    required this.number,
-    required this.title,
-    required this.subtitle,
-    required this.child,
-  });
-  final String number;
-  final String title;
-  final String subtitle;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(18),
-        border:
-            Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                height: 24,
-                width: 24,
-                decoration: BoxDecoration(
-                  color: cs.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(number,
-                      style: TextStyle(
-                          color: cs.onPrimary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700)),
-                    Text(subtitle,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: cs.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _LoadingItem extends StatelessWidget {
-  const _LoadingItem();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 8),
-        child: CircularProgressIndicator(strokeWidth: 2),
       ),
     );
   }

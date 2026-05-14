@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 
+/// Arsip — service-log style entry list.
 class HistoryTab extends StatefulWidget {
   const HistoryTab({super.key});
 
@@ -23,20 +25,16 @@ class _HistoryTabState extends State<HistoryTab> {
 
   final _rupiah = NumberFormat.currency(
     locale: 'id_ID',
-    symbol: 'Rp',
+    symbol: '',
     decimalDigits: 0,
   );
 
-  final _date = DateFormat('dd MMM yyyy', 'id_ID');
-
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return RefreshIndicator(
       onRefresh: () async => setState(() => _limit = _pageSize),
-      color: cs.primary,
-      backgroundColor: cs.surface,
+      color: AppEditorial.ink,
+      backgroundColor: AppEditorial.canvas,
       child: FutureBuilder<List<Vehicle>>(
         future: _repo.listVehicles(),
         builder: (context, vehiclesSnap) {
@@ -44,9 +42,7 @@ class _HistoryTabState extends State<HistoryTab> {
             return _CenteredError(vehiclesSnap.error.toString());
           }
           final vehicles = vehiclesSnap.data;
-          if (vehicles == null) {
-            return const _CenteredLoading('Memuat...');
-          }
+          if (vehicles == null) return const _CenteredLoading();
 
           final vehicleById = {for (final v in vehicles) v.id: v};
 
@@ -57,9 +53,7 @@ class _HistoryTabState extends State<HistoryTab> {
                 return _CenteredError(productsSnap.error.toString());
               }
               final products = productsSnap.data;
-              if (products == null) {
-                return const _CenteredLoading('Memuat...');
-              }
+              if (products == null) return const _CenteredLoading();
 
               final productById = {for (final p in products) p.id: p};
               final range = _dateRangeForQuery();
@@ -76,47 +70,110 @@ class _HistoryTabState extends State<HistoryTab> {
                     return _CenteredError(refuelsSnap.error.toString());
                   }
                   final refuels = refuelsSnap.data;
-                  if (refuels == null) {
-                    return const _CenteredLoading('Memuat riwayat...');
-                  }
+                  if (refuels == null) return const _CenteredLoading();
 
                   final canLoadMore = refuels.length == _limit;
+                  final totalRp =
+                      refuels.fold<num>(0, (s, r) => s + r.totalRp);
+                  final totalLiter =
+                      refuels.fold<num>(0, (s, r) => s + r.liters);
 
                   return ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 100),
                     children: [
-                      // ─── Filter bar ────────────────────────────────────
-                      _buildFilterBar(vehicles, refuels),
-                      const SizedBox(height: 12),
+                      // §01 Ringkasan
+                      EditorialSectionHeader(
+                        index: '01',
+                        label: 'TOTAL HASIL FILTER',
+                        trailing: Text('${refuels.length} ENTRI',
+                            style: AppEditorial.eyebrow()),
+                      ),
+                      const SizedBox(height: 14),
+                      _SummaryBlock(
+                        totalRp: totalRp,
+                        totalLiter: totalLiter,
+                        rupiah: _rupiah,
+                      ),
+                      const SizedBox(height: 24),
 
-                      // ─── List ──────────────────────────────────────────
+                      // §02 Filter
+                      const EditorialSectionHeader(
+                        index: '02',
+                        label: 'FILTER',
+                      ),
+                      const SizedBox(height: 12),
+                      _FilterBar(
+                        vehicles: vehicles,
+                        vehicleId: _vehicleIdFilter,
+                        month: _monthFilter,
+                        year: _yearFilter,
+                        years: _allYears(refuels),
+                        onVehicleChange: (v) =>
+                            setState(() => _vehicleIdFilter = v),
+                        onMonthChange: (v) {
+                          setState(() {
+                            _monthFilter = v;
+                            if (_monthFilter != null && _yearFilter == null) {
+                              _yearFilter = DateTime.now().year;
+                            }
+                            _limit = _pageSize;
+                          });
+                        },
+                        onYearChange: (v) {
+                          setState(() {
+                            _yearFilter = v;
+                            if (_yearFilter == null) _monthFilter = null;
+                            _limit = _pageSize;
+                          });
+                        },
+                        onReset: () => setState(() {
+                          _vehicleIdFilter = null;
+                          _monthFilter = null;
+                          _yearFilter = null;
+                        }),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // §03 List
+                      const EditorialSectionHeader(
+                        index: '03',
+                        label: 'CATATAN PENGISIAN',
+                      ),
+                      const SizedBox(height: 8),
+
                       if (refuels.isEmpty)
-                        _EmptyState(
-                          title: 'Belum Ada Data',
-                          subtitle:
-                              'Tambah pengisian pertama kamu di tab Add Fuel.',
+                        Padding(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 24),
+                          child: Text(
+                            'belum ada entri.',
+                            style: AppEditorial.sans(
+                              fontSize: 13,
+                              color: AppEditorial.inkSoft,
+                            ),
+                          ),
                         )
                       else
-                        ...refuels.map(
-                          (r) => _RefuelTile(
-                            refuel: r,
-                            vehicle: vehicleById[r.vehicleId],
-                            product: productById[r.fuelProductId],
-                            rupiah: _rupiah,
-                            dateFormat: _date,
-                          ),
-                        ),
+                        ...refuels.asMap().entries.map(
+                              (e) => _LogEntry(
+                                refuel: e.value,
+                                vehicle:
+                                    vehicleById[e.value.vehicleId],
+                                product:
+                                    productById[e.value.fuelProductId],
+                                rupiah: _rupiah,
+                                isLast: e.key == refuels.length - 1,
+                              ),
+                            ),
 
-                      if (canLoadMore)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 10),
-                          child: FilledButton.tonal(
-                            onPressed: () =>
-                                setState(() => _limit += _pageSize),
-                            child: const Text('Muat lebih banyak'),
-                          ),
+                      if (canLoadMore) ...[
+                        const SizedBox(height: 16),
+                        OutlinedButton(
+                          onPressed: () =>
+                              setState(() => _limit += _pageSize),
+                          child: const Text('MUAT LEBIH BANYAK ↓'),
                         ),
-                      const SizedBox(height: 90),
+                      ],
                     ],
                   );
                 },
@@ -128,250 +185,281 @@ class _HistoryTabState extends State<HistoryTab> {
     );
   }
 
-  Widget _buildFilterBar(List<Vehicle> vehicles, List<Refuel> refuels) {
-    final cs = Theme.of(context).colorScheme;
-
-    if (vehicles.isEmpty) {
-      _vehicleIdFilter = null;
-    } else if (_vehicleIdFilter != null &&
-        !vehicles.any((v) => v.id == _vehicleIdFilter)) {
-      _vehicleIdFilter = null;
-    }
-
+  List<int> _allYears(List<Refuel> refuels) {
     final now = DateTime.now();
-    final years =
-        <int>{now.year, ...refuels.map((r) => r.refuelDate.year)}.toList()
-          ..sort();
+    final years = <int>{
+      now.year,
+      ...refuels.map((r) => r.refuelDate.year),
+    }.toList()
+      ..sort();
+    return years;
+  }
 
+  (DateTime?, DateTime?) _dateRangeForQuery() {
+    if (_yearFilter == null) return (null, null);
+    if (_monthFilter == null) {
+      final from = DateTime(_yearFilter!, 1, 1);
+      final to = DateTime(_yearFilter! + 1, 1, 1);
+      return (from, to);
+    }
+    final from = DateTime(_yearFilter!, _monthFilter!, 1);
+    final to = DateTime(_yearFilter!, _monthFilter! + 1, 1);
+    return (from, to);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Summary block
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SummaryBlock extends StatelessWidget {
+  const _SummaryBlock({
+    required this.totalRp,
+    required this.totalLiter,
+    required this.rupiah,
+  });
+  final num totalRp;
+  final num totalLiter;
+  final NumberFormat rupiah;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: AppEditorial.cream,
+        border: Border.all(color: AppEditorial.hairlineSoft, width: 1),
+        borderRadius: BorderRadius.circular(AppEditorial.rCard),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(Icons.tune_rounded, size: 16, color: cs.onSurfaceVariant),
-              const SizedBox(width: 6),
-              Text(
-                'Filter',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const Spacer(),
-              if (_vehicleIdFilter != null ||
-                  _monthFilter != null ||
-                  _yearFilter != null)
-                GestureDetector(
-                  onTap: () => setState(() {
-                    _vehicleIdFilter = null;
-                    _monthFilter = null;
-                    _yearFilter = null;
-                  }),
-                  child: Text(
-                    'Reset',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: cs.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('PENGELUARAN', style: AppEditorial.eyebrow()),
+                const SizedBox(height: 6),
+                EditorialReadout(
+                  prefix: 'Rp ',
+                  value: rupiah.format(totalRp).trim(),
+                  fontSize: 28,
                 ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          // Vehicle chips
-          if (vehicles.isNotEmpty) ...[
-            Text(
-              'Kendaraan',
-              style: TextStyle(
-                fontSize: 11,
-                color: cs.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 6),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _FilterChipItem(
-                    label: 'Semua',
-                    selected: _vehicleIdFilter == null,
-                    onTap: () =>
-                        setState(() => _vehicleIdFilter = null),
-                  ),
-                  ...vehicles.map((v) => _FilterChipItem(
-                        label: '${v.type.label} — ${v.name}',
-                        selected: _vehicleIdFilter == v.id,
-                        onTap: () =>
-                            setState(() => _vehicleIdFilter = v.id),
-                      )),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          // Month/year row
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Bulan',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: cs.onSurfaceVariant,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<int?>(
-                      key: ValueKey(_monthFilter),
-                      initialValue: _monthFilter,
-                      decoration: const InputDecoration(
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        isDense: true,
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: null,
-                          child: Text('Semua'),
-                        ),
-                        for (var m = 1; m <= 12; m++)
-                          DropdownMenuItem(
-                            value: m,
-                            child:
-                                Text(m.toString().padLeft(2, '0')),
-                          ),
-                      ],
-                      onChanged: (v) => setState(() {
-                        _monthFilter = v;
-                        if (_monthFilter != null &&
-                            _yearFilter == null) {
-                          _yearFilter = DateTime.now().year;
-                        }
-                        _limit = _pageSize;
-                      }),
-                    ),
-                  ],
+          Container(width: 1, height: 56, color: AppEditorial.hairline),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('VOLUME', style: AppEditorial.eyebrow()),
+                const SizedBox(height: 6),
+                EditorialReadout(
+                  value: totalLiter.toStringAsFixed(1),
+                  suffix: ' L',
+                  fontSize: 28,
+                  color: AppEditorial.butterDeep,
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Tahun',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: cs.onSurfaceVariant,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<int?>(
-                      key: ValueKey(_yearFilter),
-                      initialValue: _yearFilter,
-                      decoration: const InputDecoration(
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        isDense: true,
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: null,
-                          child: Text('Semua'),
-                        ),
-                        for (final y in years)
-                          DropdownMenuItem(
-                              value: y, child: Text(y.toString())),
-                      ],
-                      onChanged: (v) => setState(() {
-                        _yearFilter = v;
-                        if (_yearFilter == null) {
-                          _monthFilter = null;
-                        }
-                        _limit = _pageSize;
-                      }),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  (DateTime?, DateTime?) _dateRangeForQuery() {
-    if (_yearFilter == null) return (null, null);
+// ─────────────────────────────────────────────────────────────────────────────
+// Filter bar
+// ─────────────────────────────────────────────────────────────────────────────
 
-    if (_monthFilter == null) {
-      final from = DateTime(_yearFilter!, 1, 1);
-      final toExclusive = DateTime(_yearFilter! + 1, 1, 1);
-      return (from, toExclusive);
-    }
+class _FilterBar extends StatelessWidget {
+  const _FilterBar({
+    required this.vehicles,
+    required this.vehicleId,
+    required this.month,
+    required this.year,
+    required this.years,
+    required this.onVehicleChange,
+    required this.onMonthChange,
+    required this.onYearChange,
+    required this.onReset,
+  });
 
-    final from = DateTime(_yearFilter!, _monthFilter!, 1);
-    final toExclusive = DateTime(_yearFilter!, _monthFilter! + 1, 1);
-    return (from, toExclusive);
+  final List<Vehicle> vehicles;
+  final String? vehicleId;
+  final int? month;
+  final int? year;
+  final List<int> years;
+  final ValueChanged<String?> onVehicleChange;
+  final ValueChanged<int?> onMonthChange;
+  final ValueChanged<int?> onYearChange;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFilter =
+        vehicleId != null || month != null || year != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (hasFilter)
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              onTap: onReset,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '× RESET',
+                  style: AppEditorial.mono(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppEditorial.rust,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (vehicles.isNotEmpty) ...[
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _FilterPill(
+                  label: 'SEMUA',
+                  selected: vehicleId == null,
+                  onTap: () => onVehicleChange(null),
+                ),
+                const SizedBox(width: 6),
+                ...vehicles.map((v) => Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: _FilterPill(
+                        label: '${v.type.label} · ${v.name}'
+                            .toUpperCase(),
+                        selected: vehicleId == v.id,
+                        onTap: () => onVehicleChange(v.id),
+                      ),
+                    )),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        Row(
+          children: [
+            Expanded(
+              child: _MonthYearDropdown<int?>(
+                label: 'BULAN',
+                value: month,
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Semua')),
+                  for (var m = 1; m <= 12; m++)
+                    DropdownMenuItem(
+                      value: m,
+                      child: Text(m.toString().padLeft(2, '0')),
+                    ),
+                ],
+                onChanged: onMonthChange,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _MonthYearDropdown<int?>(
+                label: 'TAHUN',
+                value: year,
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Semua')),
+                  for (final y in years)
+                    DropdownMenuItem(value: y, child: Text(y.toString())),
+                ],
+                onChanged: onYearChange,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 
-class _FilterChipItem extends StatelessWidget {
-  const _FilterChipItem({
+class _MonthYearDropdown<T> extends StatelessWidget {
+  const _MonthYearDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+  final String label;
+  final T value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: AppEditorial.eyebrow(fontSize: 9.5)),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: const BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: AppEditorial.hairline, width: 1),
+            ),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<T>(
+              isExpanded: true,
+              value: value,
+              icon: const Icon(Icons.arrow_drop_down_rounded,
+                  color: AppEditorial.inkSoft),
+              dropdownColor: AppEditorial.cream,
+              style: AppEditorial.mono(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              items: items,
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
     required this.label,
     required this.selected,
     required this.onTap,
   });
-
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        margin: const EdgeInsets.only(right: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? cs.primaryContainer : cs.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected
-                ? cs.primary.withValues(alpha: 0.3)
-                : cs.outlineVariant.withValues(alpha: 0.6),
-          ),
+          color: selected ? AppEditorial.ink : AppEditorial.canvas,
+          border: Border.all(color: AppEditorial.ink, width: 1),
+          borderRadius: BorderRadius.circular(AppEditorial.rTiny),
         ),
         child: Text(
           label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+          style: AppEditorial.mono(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: selected ? AppEditorial.canvas : AppEditorial.ink,
+            letterSpacing: 0.4,
           ),
         ),
       ),
@@ -379,127 +467,134 @@ class _FilterChipItem extends StatelessWidget {
   }
 }
 
-class _RefuelTile extends StatelessWidget {
-  const _RefuelTile({
+// ─────────────────────────────────────────────────────────────────────────────
+// Log entry — single line per refuel
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LogEntry extends StatelessWidget {
+  const _LogEntry({
     required this.refuel,
     required this.vehicle,
     required this.product,
     required this.rupiah,
-    required this.dateFormat,
+    required this.isLast,
   });
 
   final Refuel refuel;
   final Vehicle? vehicle;
   final FuelProduct? product;
   final NumberFormat rupiah;
-  final DateFormat dateFormat;
+  final bool isLast;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final vehicleText = vehicle == null
-        ? 'Kendaraan'
-        : '${vehicle!.type.label} — ${vehicle!.name}';
+        ? '—'
+        : '${vehicle!.type.label} · ${vehicle!.name}';
     final productText = product?.label ?? 'BBM';
+    final dayStr = DateFormat('dd').format(refuel.refuelDate);
+    final monthYearStr =
+        DateFormat('MMM yy', 'id_ID').format(refuel.refuelDate).toUpperCase();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+        border: Border(
+          bottom: BorderSide(
+            color: isLast ? Colors.transparent : AppEditorial.hairline,
+            width: 1,
+          ),
+        ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 46,
-            width: 46,
-            decoration: BoxDecoration(
-              color: refuel.isFullTank
-                  ? cs.primaryContainer
-                  : cs.secondaryContainer,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              refuel.isFullTank
-                  ? Icons.local_gas_station_rounded
-                  : Icons.local_gas_station_outlined,
-              color: refuel.isFullTank
-                  ? cs.primary
-                  : cs.secondary,
-              size: 22,
+          // Date — stacked calendar style (big day, small month/year)
+          SizedBox(
+            width: 52,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  dayStr,
+                  style: AppEditorial.mono(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    height: 1.0,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  monthYearStr,
+                  style: AppEditorial.eyebrow(
+                    fontSize: 9.5,
+                    color: AppEditorial.inkMuted,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  rupiah.format(refuel.totalRp),
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  dateFormat.format(refuel.refuelDate),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: cs.onSurfaceVariant,
+                  'Rp ${rupiah.format(refuel.totalRp).trim()}',
+                  style: AppEditorial.mono(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$vehicleText • $productText',
-                  style: TextStyle(
+                  productText,
+                  style: AppEditorial.sans(
+                    fontSize: 12,
+                    color: AppEditorial.inkSoft,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  vehicleText,
+                  style: AppEditorial.mono(
                     fontSize: 11,
-                    color: cs.onSurfaceVariant,
+                    color: AppEditorial.inkMuted,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${refuel.liters.toStringAsFixed(2)} L',
-                style: TextStyle(
-                  fontSize: 13,
+                refuel.liters.toStringAsFixed(2),
+                style: AppEditorial.mono(
+                  fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: cs.primary,
+                  color: AppEditorial.butterDeep,
                 ),
               ),
-              if (refuel.odometerKm != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  '${refuel.odometerKm} km',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: cs.onSurfaceVariant,
-                  ),
-                ),
-              ],
+              Text('LITER', style: AppEditorial.eyebrow(fontSize: 9)),
               if (refuel.isFullTank) ...[
                 const SizedBox(height: 4),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
+                      horizontal: 5, vertical: 2),
                   decoration: BoxDecoration(
-                    color: cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(6),
+                    color: AppEditorial.butter,
+                    borderRadius:
+                        BorderRadius.circular(AppEditorial.rTiny),
                   ),
                   child: Text(
-                    'Full',
-                    style: TextStyle(
+                    'FULL',
+                    style: AppEditorial.mono(
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
-                      color: cs.primary,
+                      letterSpacing: 0.6,
                     ),
                   ),
                 ),
@@ -513,27 +608,16 @@ class _RefuelTile extends StatelessWidget {
 }
 
 class _CenteredLoading extends StatelessWidget {
-  const _CenteredLoading(this.text);
-
-  final String text;
+  const _CenteredLoading();
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        const SizedBox(height: 160),
+      children: const [
+        SizedBox(height: 200),
         Center(
-          child: Column(
-            children: [
-              CircularProgressIndicator(color: cs.primary),
-              const SizedBox(height: 12),
-              Text(text,
-                  style:
-                      TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
-            ],
-          ),
+          child: CircularProgressIndicator(color: AppEditorial.ink),
         ),
       ],
     );
@@ -542,59 +626,32 @@ class _CenteredLoading extends StatelessWidget {
 
 class _CenteredError extends StatelessWidget {
   const _CenteredError(this.message);
-
   final String message;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
+      padding: const EdgeInsets.all(20),
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
       children: [
-        _EmptyState(title: 'Terjadi Kesalahan', subtitle: message),
+        const SizedBox(height: 40),
+        const EditorialEyebrow('ERROR'),
+        const SizedBox(height: 10),
+        Text(
+          'Gagal memuat catatan.',
+          style: AppEditorial.mono(
+            fontSize: 22,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(message,
+            style: AppEditorial.sans(
+              fontSize: 13,
+              color: AppEditorial.inkSoft,
+              height: 1.5,
+            )),
       ],
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.inbox_rounded, color: cs.onSurfaceVariant, size: 40),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: cs.onSurfaceVariant),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
     );
   }
 }

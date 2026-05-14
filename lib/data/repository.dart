@@ -3,9 +3,18 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'models.dart';
 
 class SupabaseRepository {
-  SupabaseRepository(this._client);
+  SupabaseRepository(this._client) : _db = _client.schema(_schemaName);
 
   final SupabaseClient _client;
+
+  /// Postgres schema yang menampung semua tabel BensinKu.
+  /// Lihat `supabase/migrations/20260514120000_move_to_bensinku_schema.sql`.
+  static const String _schemaName = 'bensinku';
+
+  /// Query builder yang otomatis resolve `.from()` / `.rpc()` ke
+  /// `bensinku.<table>` tanpa perlu rewrite tiap call site.
+  /// Tetap pakai `_client` langsung untuk auth / functions / storage / realtime.
+  final SupabaseQuerySchema _db;
 
   static SupabaseRepository ofDefaultClient() {
     return SupabaseRepository(Supabase.instance.client);
@@ -46,7 +55,7 @@ class SupabaseRepository {
 
   Future<List<Vehicle>> listVehicles() async {
     return _run(() async {
-      final List<dynamic> rows = await _client
+      final List<dynamic> rows = await _db
           .from('vehicles')
           .select()
           .order('vehicle_type');
@@ -62,7 +71,7 @@ class SupabaseRepository {
   }) async {
     return _run(() async {
       final capacity = tankCapacityLiters;
-      final Map<String, dynamic> row = await _client
+      final Map<String, dynamic> row = await _db
           .from('vehicles')
           .insert({
             'vehicle_type': type.dbValue,
@@ -83,7 +92,7 @@ class SupabaseRepository {
     num? tankCapacityLiters,
   }) async {
     return _run(() async {
-      final Map<String, dynamic> row = await _client
+      final Map<String, dynamic> row = await _db
           .from('vehicles')
           .update({
             'vehicle_type': type.dbValue,
@@ -99,13 +108,13 @@ class SupabaseRepository {
 
   Future<void> deleteVehicle(String id) async {
     return _run(() async {
-      await _client.from('vehicles').delete().eq('id', id);
+      await _db.from('vehicles').delete().eq('id', id);
     });
   }
 
   Future<List<FuelProduct>> listFuelProducts() async {
     return _run(() async {
-      final List<dynamic> rows = await _client
+      final List<dynamic> rows = await _db
           .from('fuel_products')
           .select('id, brand, name, active, sort_order')
           .eq('active', true)
@@ -124,7 +133,7 @@ class SupabaseRepository {
     return _run(() async {
       final day = _dateOnly(onDate);
 
-      final rows = await _client
+      final rows = await _db
           .from('fuel_prices')
           .select('price_per_liter, effective_from')
           .eq('fuel_product_id', fuelProductId)
@@ -150,7 +159,7 @@ class SupabaseRepository {
     required bool isFullTank,
   }) async {
     return _run(() async {
-      final Map<String, dynamic> row = await _client
+      final Map<String, dynamic> row = await _db
           .from('refuels')
           .insert({
             'vehicle_id': vehicleId,
@@ -178,7 +187,7 @@ class SupabaseRepository {
     int? limit,
   }) async {
     return _run(() async {
-      final base = _client.from('refuels').select(
+      final base = _db.from('refuels').select(
             'id, vehicle_id, fuel_product_id, refuel_date, odometer_km, total_rp, price_per_liter_snapshot, liters, is_full_tank',
           );
 
@@ -217,7 +226,7 @@ class SupabaseRepository {
       final userId = _client.auth.currentUser?.id;
       if (userId == null) throw StateError('User not logged in');
 
-      final Map<String, dynamic> row = await _client
+      final Map<String, dynamic> row = await _db
           .from('trips')
           .insert({
             'vehicle_id': vehicleId,
@@ -235,7 +244,7 @@ class SupabaseRepository {
     required double distanceKm,
   }) async {
     return _run(() async {
-      final Map<String, dynamic> row = await _client
+      final Map<String, dynamic> row = await _db
           .from('trips')
           .update({
             'ended_at': DateTime.now().toUtc().toIso8601String(),
@@ -251,7 +260,7 @@ class SupabaseRepository {
   Future<void> addWaypoints(List<TripWaypoint> waypoints) async {
     if (waypoints.isEmpty) return;
     return _run(() async {
-      await _client
+      await _db
           .from('trip_waypoints')
           .insert(waypoints.map((w) => w.toJson()).toList());
     });
@@ -263,7 +272,7 @@ class SupabaseRepository {
     DateTime? since,
   }) async {
     return _run(() async {
-      var query = _client
+      var query = _db
           .from('trips')
           .select()
           .not('ended_at', 'is', null);
@@ -284,7 +293,7 @@ class SupabaseRepository {
 
   Future<List<TripWaypoint>> getTripWaypoints(String tripId) async {
     return _run(() async {
-      final List<dynamic> rows = await _client
+      final List<dynamic> rows = await _db
           .from('trip_waypoints')
           .select()
           .eq('trip_id', tripId)

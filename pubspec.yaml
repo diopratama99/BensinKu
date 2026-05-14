@@ -46,6 +46,9 @@ dependencies:
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
   flutter_native_splash: ^2.4.3
+  speech_to_text: ^7.0.0
+  image_picker: ^1.1.2
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +65,7 @@ flutter:
   assets:
     - assets/illustrations/
     - assets/icon.png
+    - assets/vehicles/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

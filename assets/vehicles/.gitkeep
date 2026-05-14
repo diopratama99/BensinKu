@@ -1,0 +1,5 @@
+# Drop user-uploaded vehicle photos here.
+# Naming convention:
+#   <vehicleId>.jpg   (preferred)
+#   motor-default.jpg (fallback for type=motor)
+#   mobil-default.jpg (fallback for type=mobil)

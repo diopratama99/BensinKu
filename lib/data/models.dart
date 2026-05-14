@@ -185,3 +185,62 @@ class TripWaypoint {
         'recorded_at': recordedAt.toUtc().toIso8601String(),
       };
 }
+
+
+/// Hasil parse dari Edge Function `parse-fuel-receipt` atau `parse-fuel-voice`.
+/// Sengaja loose (semua field nullable / optional) supaya UI bisa pre-fill apa
+/// adanya dan user tinggal koreksi di sheet input.
+class ParsedRefuel {
+  const ParsedRefuel({
+    required this.vehicleId,
+    required this.vehicleLabel,
+    required this.fuelProductId,
+    required this.fuelProductLabel,
+    required this.refuelDate,
+    required this.totalRp,
+    required this.pricePerLiter,
+    required this.liters,
+    required this.isFullTank,
+    required this.confidence,
+    required this.reasoning,
+    this.odometerKm,
+  });
+
+  final String vehicleId;
+  final String vehicleLabel;
+  final String fuelProductId;
+  final String fuelProductLabel;
+  final DateTime refuelDate;
+  final num? odometerKm;
+  final num totalRp;
+  final num pricePerLiter;
+  final num liters;
+  final bool isFullTank;
+  final String confidence;
+  final String reasoning;
+
+  factory ParsedRefuel.fromJson(Map<String, dynamic> json) {
+    final dateRaw = json['refuel_date'];
+    DateTime parsedDate;
+    if (dateRaw is String && dateRaw.isNotEmpty) {
+      parsedDate = DateTime.tryParse(dateRaw) ?? DateTime.now();
+    } else {
+      parsedDate = DateTime.now();
+    }
+
+    return ParsedRefuel(
+      vehicleId: (json['vehicle_id'] as String?) ?? '',
+      vehicleLabel: (json['vehicle_label'] as String?) ?? '',
+      fuelProductId: (json['fuel_product_id'] as String?) ?? '',
+      fuelProductLabel: (json['fuel_product_label'] as String?) ?? '',
+      refuelDate: parsedDate,
+      odometerKm: (json['odometer_km'] as num?),
+      totalRp: (json['total_rp'] as num?) ?? 0,
+      pricePerLiter: (json['price_per_liter'] as num?) ?? 0,
+      liters: (json['liters'] as num?) ?? 0,
+      isFullTank: (json['is_full_tank'] as bool?) ?? false,
+      confidence: (json['confidence'] as String?) ?? 'medium',
+      reasoning: (json['reasoning'] as String?) ?? '',
+    );
+  }
+}

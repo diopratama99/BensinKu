@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../widgets/brand_scaffold.dart';
+import '../../app/theme.dart';
 import 'email_verify_page.dart';
 
 class SignUpPage extends StatefulWidget {
@@ -37,25 +37,16 @@ class _SignUpPageState extends State<SignUpPage> {
     final password = _passwordController.text;
     final confirm = _confirmController.text;
 
-    if (name.isEmpty) {
-      setState(() => _error = 'Nama wajib diisi');
-      return;
-    }
-    if (email.isEmpty) {
-      setState(() => _error = 'Email wajib diisi');
-      return;
-    }
+    if (name.isEmpty) return setState(() => _error = 'Nama wajib diisi');
+    if (email.isEmpty) return setState(() => _error = 'Email wajib diisi');
     if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(email)) {
-      setState(() => _error = 'Format email tidak valid');
-      return;
+      return setState(() => _error = 'Format email tidak valid');
     }
     if (password.length < 8) {
-      setState(() => _error = 'Password minimal 8 karakter');
-      return;
+      return setState(() => _error = 'Password minimal 8 karakter');
     }
     if (password != confirm) {
-      setState(() => _error = 'Konfirmasi password tidak cocok');
-      return;
+      return setState(() => _error = 'Konfirmasi password tidak cocok');
     }
 
     setState(() {
@@ -72,13 +63,11 @@ class _SignUpPageState extends State<SignUpPage> {
 
       if (!mounted) return;
 
-      // If identities is empty, email already registered
       if (res.user != null && (res.user!.identities?.isEmpty ?? false)) {
-        setState(() => _error = 'Email sudah terdaftar. Silakan login.');
+        setState(() => _error = 'Email sudah terdaftar.');
         return;
       }
 
-      // Navigate to verification waiting page
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(
           builder: (_) => EmailVerifyPage(email: email),
@@ -95,222 +84,203 @@ class _SignUpPageState extends State<SignUpPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      body: BrandBackdrop(
-        assetPath: 'assets/illustrations/dashboard_wave.svg',
-        topPadding: -30,
-        child: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 22),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // ── Back button ──────────────────────────────────────
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: Container(
-                          height: 40,
-                          width: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: cs.primary.withValues(alpha: 0.12),
-                                blurRadius: 8,
-                              ),
-                            ],
-                          ),
-                          child: Icon(Icons.arrow_back_rounded,
-                              color: cs.primary, size: 20),
+      backgroundColor: AppEditorial.canvas,
+      appBar: AppBar(
+        leading: IconButton(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Text('BENSINKU',
+                          style: AppEditorial.mono(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          )),
+                      const SizedBox(width: 10),
+                      Container(
+                        width: 4,
+                        height: 4,
+                        decoration: const BoxDecoration(
+                          color: AppEditorial.butter,
+                          shape: BoxShape.circle,
                         ),
                       ),
+                      const SizedBox(width: 10),
+                      Text('VOL.02 · DAFTAR',
+                          style: AppEditorial.eyebrow()),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  Text(
+                    'Buat akun baru.',
+                    style: AppEditorial.mono(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.5,
                     ),
-                    const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Isi form, lalu cek email untuk verifikasi.',
+                    style: AppEditorial.sans(
+                      fontSize: 13,
+                      color: AppEditorial.inkSoft,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Container(height: 1, color: AppEditorial.ink),
+                  const SizedBox(height: 24),
 
-                    // ── Form card ────────────────────────────────────────
-                    BrandPanel(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Header
-                          Row(
-                            children: [
-                              Container(
-                                height: 40,
-                                width: 40,
-                                decoration: BoxDecoration(
-                                  color: cs.primaryContainer,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Icon(Icons.person_add_alt_1_rounded,
-                                    color: cs.primary),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Buat Akun Baru',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.w900),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Isi data di bawah, lalu cek email untuk verifikasi.',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(color: cs.onSurfaceVariant),
-                          ),
-                          const SizedBox(height: 18),
-
-                          // Name
-                          TextField(
-                            controller: _nameController,
-                            textInputAction: TextInputAction.next,
-                            textCapitalization: TextCapitalization.words,
-                            autofillHints: const [AutofillHints.name],
-                            decoration: const InputDecoration(
-                              labelText: 'Nama Lengkap',
-                              hintText: 'John Doe',
-                              prefixIcon:
-                                  Icon(Icons.badge_rounded),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Email
-                          TextField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                            autofillHints: const [AutofillHints.email],
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              hintText: 'contoh@email.com',
-                              prefixIcon:
-                                  Icon(Icons.alternate_email_rounded),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Password
-                          TextField(
-                            controller: _passwordController,
-                            obscureText: _obscurePass,
-                            textInputAction: TextInputAction.next,
-                            autofillHints: const [AutofillHints.newPassword],
-                            decoration: InputDecoration(
-                              labelText: 'Password',
-                              hintText: 'Minimal 8 karakter',
-                              prefixIcon: const Icon(Icons.lock_rounded),
-                              suffixIcon: IconButton(
-                                icon: Icon(_obscurePass
-                                    ? Icons.visibility_off_rounded
-                                    : Icons.visibility_rounded),
-                                onPressed: () => setState(
-                                    () => _obscurePass = !_obscurePass),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Confirm password
-                          TextField(
-                            controller: _confirmController,
-                            obscureText: _obscureConfirm,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => _busy ? null : _signUp(),
-                            decoration: InputDecoration(
-                              labelText: 'Konfirmasi Password',
-                              prefixIcon: const Icon(Icons.lock_outline_rounded),
-                              suffixIcon: IconButton(
-                                icon: Icon(_obscureConfirm
-                                    ? Icons.visibility_off_rounded
-                                    : Icons.visibility_rounded),
-                                onPressed: () => setState(
-                                    () => _obscureConfirm = !_obscureConfirm),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-
-                          // Error banner
-                          if (_error != null) ...[
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: cs.errorContainer,
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(Icons.error_outline_rounded,
-                                      color: cs.onErrorContainer),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      _error!,
-                                      style: TextStyle(
-                                          color: cs.onErrorContainer),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-
-                          // Submit
-                          FilledButton.icon(
-                            onPressed: _busy ? null : _signUp,
-                            style: FilledButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14)),
-                            ),
-                            icon: _busy
-                                ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white),
-                                  )
-                                : const Icon(Icons.mail_rounded),
-                            label: Text(_busy
-                                ? 'Mendaftar...'
-                                : 'Daftar & Kirim Verifikasi'),
-                          ),
-                          const SizedBox(height: 10),
-                          Center(
-                            child: TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('Sudah punya akun? Masuk'),
-                            ),
-                          ),
-                        ],
+                  TextField(
+                    controller: _nameController,
+                    textInputAction: TextInputAction.next,
+                    textCapitalization: TextCapitalization.words,
+                    autofillHints: const [AutofillHints.name],
+                    style: AppEditorial.mono(
+                        fontSize: 15, fontWeight: FontWeight.w500),
+                    decoration: const InputDecoration(
+                      labelText: 'NAMA LENGKAP',
+                      hintText: 'John Doe',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.email],
+                    style: AppEditorial.mono(
+                        fontSize: 15, fontWeight: FontWeight.w500),
+                    decoration: const InputDecoration(
+                      labelText: 'EMAIL',
+                      hintText: 'contoh@email.com',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: _obscurePass,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.newPassword],
+                    style: AppEditorial.mono(
+                        fontSize: 15, fontWeight: FontWeight.w500),
+                    decoration: InputDecoration(
+                      labelText: 'PASSWORD',
+                      hintText: 'Min. 8 karakter',
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePass
+                              ? Icons.visibility_off_rounded
+                              : Icons.visibility_rounded,
+                          color: AppEditorial.inkSoft,
+                          size: 18,
+                        ),
+                        onPressed: () => setState(
+                            () => _obscurePass = !_obscurePass),
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _confirmController,
+                    obscureText: _obscureConfirm,
+                    textInputAction: TextInputAction.done,
+                    style: AppEditorial.mono(
+                        fontSize: 15, fontWeight: FontWeight.w500),
+                    onSubmitted: (_) => _busy ? null : _signUp(),
+                    decoration: InputDecoration(
+                      labelText: 'KONFIRMASI PASSWORD',
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirm
+                              ? Icons.visibility_off_rounded
+                              : Icons.visibility_rounded,
+                          color: AppEditorial.inkSoft,
+                          size: 18,
+                        ),
+                        onPressed: () => setState(
+                            () => _obscureConfirm = !_obscureConfirm),
+                      ),
+                    ),
+                  ),
+
+                  if (_error != null) ...[
+                    const SizedBox(height: 14),
+                    _ErrorBox(message: _error!),
                   ],
-                ),
+
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _busy ? null : _signUp,
+                    child: _busy
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppEditorial.canvas,
+                            ),
+                          )
+                        : const Text('DAFTAR & VERIFIKASI →'),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('SUDAH PUNYA AKUN? MASUK'),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ErrorBox extends StatelessWidget {
+  const _ErrorBox({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppEditorial.rust, width: 1),
+        borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              color: AppEditorial.rust, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: AppEditorial.sans(
+                fontSize: 12.5,
+                color: AppEditorial.rust,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

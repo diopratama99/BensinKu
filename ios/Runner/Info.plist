@@ -47,5 +47,13 @@
 		<true/>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>BensinKu butuh akses mikrofon untuk fitur input pengisian via suara.</string>
+		<key>NSSpeechRecognitionUsageDescription</key>
+		<string>BensinKu butuh akses speech recognition untuk mengubah ucapan jadi data pengisian.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>BensinKu butuh akses kamera untuk memindai struk SPBU.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>BensinKu butuh akses galeri untuk memilih foto struk SPBU.</string>
 	</dict>
 </plist>
