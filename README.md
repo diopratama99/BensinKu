@@ -40,11 +40,54 @@
 
 ## Overview
 
-BensinKu adalah aplikasi mobile untuk **memantau pengeluaran bahan bakar** kendaraan pribadi (motor & mobil). Berbeda dari sekadar buku catatan digital, BensinKu memakai pendekatan **prediksi adaptif** — sistem menggabungkan data referensi kendaraan (CC, tahun, transmisi, profil pemakaian) dengan pengukuran nyata dari setiap siklus full-tank → full-tank, lalu menghasilkan estimasi konsumsi yang makin akurat seiring data bertambah.
-
-Hari pertama install, prediksi sudah jalan berbasis prior. Setiap kali pengguna mengisi penuh tanki, sistem belajar dan menyesuaikan. Tidak ada cold start, tidak ada periode "data masih kurang".
+BensinKu adalah aplikasi mobile untuk **memantau pengeluaran bahan bakar** kendaraan pribadi (motor & mobil). Berbeda dari sekadar buku catatan digital, BensinKu memakai pendekatan **prediksi adaptif** — sistem menggabungkan data referensi kendaraan dengan pengukuran nyata dari setiap siklus full-tank → full-tank, lalu menghasilkan estimasi konsumsi yang makin akurat seiring data bertambah.
 
 Untuk mempercepat input, BensinKu juga punya dua jalur AI: **scan struk SPBU** lewat kamera (OCR + parsing terstruktur) dan **input suara** ("isi pertamax 50 ribu di motor") yang langsung diparse jadi entri pengisian.
+
+### Bagaimana cara menghindari cold-start?
+
+Masalah klasik aplikasi tracker: hari pertama install, sistem tidak tahu apa-apa tentang user. Mau dirata-rata dari trip apa? Belum ada trip. Mau prediksi konsumsi pakai apa? Belum ada satu pun pengisian. Jadi prediksi awal ngawur, atau worse, ditampilin sebagai "—" sampai user manual ngumpulin data berminggu-minggu.
+
+BensinKu menyiasati ini dengan **Bayesian blending** antara dua sumber sinyal:
+
+1. **Prior** — dihitung dari data referensi yang user isi saat onboarding (CC mesin, tahun produksi, transmisi, tipe bodi, profil pakai, kota utama). Sistem punya tabel baseline km/L per kategori kendaraan (mis. motor 110cc → 55 km/L; SUV 1500cc → 10 km/L), lalu mengaplikasikan multiplikasi:
+
+   ```
+   prior = base × ageFactor × transmissionFactor × cityFactor
+   ```
+
+   Faktor-faktor ini menyesuaikan dengan realita: kendaraan tua boros 15–25%, matic di kota macet boros 10%, Jakarta minus 20% efisiensi vs jalan luar kota. Dari hari pertama, sistem sudah punya angka realistis tanpa data trip apa pun.
+
+2. **Likelihood (sample)** — tiap kali user mencatat pengisian dengan flag `is_full_tank=true`, sistem otomatis cari pengisian penuh sebelumnya untuk kendaraan yang sama, hitung jarak tempuh di interval itu (dari odometer atau trip GPS), lalu insert satu row di `fuel_efficiency_samples` dengan km/L terukur. Ini adalah ground truth nyata milik user.
+
+3. **Posterior** — kombinasi keduanya pakai weighted mean:
+
+   ```
+   posterior = (α · prior + Σ samples) / (α + n)
+   ```
+
+   `α = 8` (prior weight dalam "effective measurements"). Artinya:
+   - **n = 0**: posterior = prior. UI menampilkan badge `PRIOR` ("setup awal").
+   - **n = 4**: prior dan sampel kira-kira berbobot sama. Badge `MIXED`.
+   - **n = 24+**: bobot prior tinggal ~25%, sampel mendominasi. Badge `DATA-DRIVEN`.
+
+Jadi pengguna langsung dapat angka yang masuk akal di hari pertama, lalu prediksi otomatis bergeser mendekati pengukuran nyata seiring waktu — tanpa harus klik tombol "kalibrasi" atau menunggu jumlah data minimum.
+
+### Roadmap untuk akurasi yang makin tajam
+
+Fondasi sekarang sudah membungkus sinyal terkuat (prior + full-tank ground truth). Beberapa lapisan yang direncanakan untuk meningkatkan akurasi lebih jauh:
+
+- **Cluster konteks per perjalanan** — tag setiap trip GPS dengan time-of-day, weekday/weekend, durasi, kecepatan rata-rata. Lalu pakai k-means sederhana untuk memisahkan pola (mis. 3 cluster: komuter pagi, leisure weekend, long-trip mudik). Prediksi akan menimbang bobot tiap cluster sesuai pola minggu user — Senin pagi vs Sabtu sore akan punya estimasi berbeda.
+
+- **Anomaly detection** — flag entri yang mencurigakan: liter di luar batas wajar tanki, harga per liter outlier, atau km tempuh tidak konsisten dengan trip log. Sample bermasalah ditandai untuk review user, bukan langsung membusuki posterior. Saat ini outlier difilter dengan range guard (km/L 2–100) sebagai backstop minimal.
+
+- **Auto-correction dari pola jangka panjang** — kalau sampel terus konsisten lebih rendah dari prior (mis. motor user ternyata boros karena modifikasi atau kondisi), sistem akan turunkan bobot prior lebih cepat. Sebaliknya kalau sampel sangat variabel, prior dipertahankan lebih lama untuk stabilitas.
+
+- **Cross-user signal (collaborative)** — kendaraan dengan spesifikasi mirip bisa saling melengkapi. User baru dengan Vario 125 2020 di Jakarta langsung dapat prior yang lebih tajam karena sudah ada data agregat dari user lain dengan kombinasi serupa. Implementasi-nya butuh privacy-preserving aggregation (k-anonymity ≥ 5) di sisi server.
+
+- **Per-trip efficiency** — selama ini sample diukur full-tank ke full-tank. Kalau odometer dicatat tiap pengisian, sistem bisa hitung efisiensi per pengisian (bukan per cycle), memberi ~3–4× lebih banyak data point.
+
+- **Pendekatan eksplisit: bukan RAG dengan embedding** — sengaja dipilih jalur statistik klasik. Masalah prediksi konsumsi adalah numerical regression dengan time series, bukan retrieval. Embedding tidak akan menambah sinyal baru di atas data deret angka yang sudah ada.
 
 ---
 
