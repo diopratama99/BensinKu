@@ -61,6 +61,23 @@ class TripService extends ChangeNotifier {
   final List<TripWaypoint> _pendingWaypoints = [];
   Timer? _flushTimer;
 
+  // ── Idle auto-stop ──────────────────────────────────────────────────
+  /// If no waypoint with significant movement (>30m from previous) arrives
+  /// for this duration, the trip is auto-stopped. The idle window is
+  /// trimmed from the recorded trip (ended_at = last moving waypoint time).
+  static const Duration _idleTimeout = Duration(minutes: 30);
+  Timer? _idleCheckTimer;
+  DateTime? _lastMovingWaypointTime;
+
+  /// True if the trip was auto-stopped due to idle timeout. UI can use
+  /// this to show a badge "DIHENTIKAN OTOMATIS".
+  bool _autoStopped = false;
+  bool get autoStopped => _autoStopped;
+
+  /// Callback invoked when auto-stop fires. The host widget should show
+  /// the trip summary dialog.
+  void Function(Trip)? onAutoStopped;
+
   /// Result of a permission request. Tells the caller whether tracking
   /// will survive screen-off / app-backgrounded.
   ///
@@ -150,6 +167,12 @@ class TripService extends ChangeNotifier {
     // Flush waypoints to Supabase every 30s
     _flushTimer =
         Timer.periodic(const Duration(seconds: 30), (_) => _flushWaypoints());
+
+    // Idle auto-stop: check every 60s if user has been stationary too long.
+    _lastMovingWaypointTime = DateTime.now();
+    _autoStopped = false;
+    _idleCheckTimer =
+        Timer.periodic(const Duration(seconds: 60), (_) => _checkIdle());
   }
 
   /// Platform-aware location settings for an active trip.
@@ -201,12 +224,20 @@ class TripService extends ChangeNotifier {
     if (!isTracking) return;
 
     if (_positions.isNotEmpty) {
-      _distanceMeters += Geolocator.distanceBetween(
+      final delta = Geolocator.distanceBetween(
         _positions.last.latitude,
         _positions.last.longitude,
         pos.latitude,
         pos.longitude,
       );
+      _distanceMeters += delta;
+      // Only count as "moving" if delta > 30m (filters GPS jitter while
+      // parked). This resets the idle timer.
+      if (delta > 30) {
+        _lastMovingWaypointTime = pos.timestamp;
+      }
+    } else {
+      _lastMovingWaypointTime = pos.timestamp;
     }
 
     _positions.add(pos);
@@ -233,6 +264,62 @@ class TripService extends ChangeNotifier {
     }
   }
 
+  /// Fired every 60s. If the last significant movement was >30 minutes
+  /// ago, auto-stop the trip with `ended_at` clipped to that last-moving
+  /// timestamp. The 30-minute idle window is NOT counted toward trip
+  /// duration or distance.
+  void _checkIdle() {
+    if (!isTracking) return;
+    final lastMove = _lastMovingWaypointTime;
+    if (lastMove == null) return;
+    final idleDuration = DateTime.now().difference(lastMove);
+    if (idleDuration >= _idleTimeout) {
+      _performAutoStop(lastMove);
+    }
+  }
+
+  Future<void> _performAutoStop(DateTime cutoffTime) async {
+    if (!isTracking) return;
+
+    // Cancel streams immediately.
+    _positionSub?.cancel();
+    _positionSub = null;
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    _idleCheckTimer?.cancel();
+    _idleCheckTimer = null;
+
+    // Flush remaining waypoints.
+    await _flushWaypoints();
+
+    // Compute distance only up to cutoff (exclude idle tail).
+    double clippedDistance = 0;
+    for (int i = 1; i < _positions.length; i++) {
+      if (_positions[i].timestamp.isAfter(cutoffTime)) break;
+      clippedDistance += Geolocator.distanceBetween(
+        _positions[i - 1].latitude,
+        _positions[i - 1].longitude,
+        _positions[i].latitude,
+        _positions[i].longitude,
+      );
+    }
+
+    try {
+      final ended = await _repo.endTrip(
+        tripId: _activeTrip!.id,
+        distanceKm: clippedDistance / 1000.0,
+        endedAt: cutoffTime,
+      );
+      _activeTrip = ended;
+      _autoStopped = true;
+      notifyListeners();
+      onAutoStopped?.call(ended);
+    } catch (_) {
+      // If DB update fails, trip stays "active" — user can manually stop
+      // next time they open the app.
+    }
+  }
+
   /// Stops tracking, flushes all waypoints, ends trip in Supabase.
   Future<Trip?> stopTrip() async {
     if (!isTracking) return null;
@@ -241,6 +328,8 @@ class TripService extends ChangeNotifier {
     _positionSub = null;
     _flushTimer?.cancel();
     _flushTimer = null;
+    _idleCheckTimer?.cancel();
+    _idleCheckTimer = null;
 
     // Flush remaining waypoints
     await _flushWaypoints();
@@ -259,6 +348,7 @@ class TripService extends ChangeNotifier {
   void dispose() {
     _positionSub?.cancel();
     _flushTimer?.cancel();
+    _idleCheckTimer?.cancel();
     super.dispose();
   }
 }

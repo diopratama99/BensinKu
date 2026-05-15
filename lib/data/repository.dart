@@ -362,12 +362,14 @@ class SupabaseRepository {
   Future<Trip> endTrip({
     required String tripId,
     required double distanceKm,
+    DateTime? endedAt,
   }) async {
     return _run(() async {
       final Map<String, dynamic> row = await _db
           .from('trips')
           .update({
-            'ended_at': DateTime.now().toUtc().toIso8601String(),
+            'ended_at':
+                (endedAt ?? DateTime.now()).toUtc().toIso8601String(),
             'distance_km': distanceKm,
           })
           .eq('id', tripId)

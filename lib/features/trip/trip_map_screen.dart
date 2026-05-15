@@ -207,6 +207,7 @@ class _TripMapScreenState extends State<TripMapScreen>
       vehicleId: _selectedVehicle!.id,
     );
     svc.addListener(_onServiceUpdate);
+    svc.onAutoStopped = _onAutoStopped;
 
     try {
       // Hand off the GPS stream to the high-accuracy tracking service.
@@ -228,13 +229,26 @@ class _TripMapScreenState extends State<TripMapScreen>
 
     try {
       final finished = await _service!.stopTrip();
-      if (mounted && finished != null) {
+      if (!mounted) return;
+
+      // Teardown service FIRST so the widget tree settles into idle state.
+      _service!.removeListener(_onServiceUpdate);
+      _service!.dispose();
+      _service = null;
+      _startIdlePositionStream();
+
+      setState(() => _stopping = false);
+
+      // Now show summary from a stable idle state. The dialog won't get
+      // killed by a rebuild because the tree is already in its final form.
+      if (finished != null) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (!mounted) return;
         _showTripSummary(finished);
       }
     } catch (e) {
-      _showSnack('Gagal mengakhiri: $e');
-    } finally {
       if (mounted) setState(() => _stopping = false);
+      _showSnack('Gagal mengakhiri: $e');
     }
   }
 
@@ -343,7 +357,14 @@ class _TripMapScreenState extends State<TripMapScreen>
     );
   }
 
-  void _showTripSummary(Trip trip) {
+  void _onAutoStopped(Trip trip) {
+    if (!mounted) return;
+    setState(() {});
+    _startIdlePositionStream();
+    _showTripSummary(trip, autoStopped: true);
+  }
+
+  void _showTripSummary(Trip trip, {bool autoStopped = false}) {
     showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -358,16 +379,33 @@ class _TripMapScreenState extends State<TripMapScreen>
 
         return AlertDialog(
           title: Text(
-            'PERJALANAN SELESAI',
+            autoStopped
+                ? 'DIHENTIKAN OTOMATIS'
+                : 'PERJALANAN SELESAI',
             style: AppEditorial.mono(
               fontSize: 14,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.6,
+              color: autoStopped ? AppEditorial.rust : null,
             ),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (autoStopped) ...[
+                Text(
+                  'Tidak ada pergerakan selama 30 menit. '
+                  'Trip dihentikan otomatis dan waktu idle '
+                  'tidak dihitung.',
+                  style: AppEditorial.sans(
+                    fontSize: 12,
+                    color: AppEditorial.inkSoft,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               EditorialDataRow(label: 'Jarak tempuh', value: distText),
               EditorialDataRow(label: 'Durasi', value: durText),
               EditorialDataRow(
@@ -382,14 +420,6 @@ class _TripMapScreenState extends State<TripMapScreen>
             FilledButton(
               onPressed: () {
                 Navigator.of(ctx).pop();
-                setState(() {
-                  _service?.removeListener(_onServiceUpdate);
-                  _service?.dispose();
-                  _service = null;
-                });
-                // Trip is over — resume the lightweight stream so the
-                // "you are here" dot keeps refreshing.
-                _startIdlePositionStream();
               },
               child: const Text('OK'),
             ),

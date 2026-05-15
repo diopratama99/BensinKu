@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
+import '../../services/prediction_service.dart';
 
 class TripDetailPage extends StatelessWidget {
   const TripDetailPage({super.key, required this.trip});
@@ -190,8 +192,10 @@ class TripDetailPage extends StatelessWidget {
                     EditorialDataRow(
                       label: 'Titik GPS',
                       value: '${waypoints.length}',
-                      isLast: true,
                     ),
+
+                    // Fuel estimate section
+                    _FuelEstimateRows(trip: trip),
 
                     if (trip.note != null && trip.note!.isNotEmpty) ...[
                       const SizedBox(height: 24),
@@ -223,6 +227,111 @@ class TripDetailPage extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// Fuel consumption estimate for this trip, computed from the vehicle's
+/// posterior km/L (Bayesian blend of prior + measured samples).
+class _FuelEstimateRows extends StatelessWidget {
+  const _FuelEstimateRows({required this.trip});
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    if (trip.distanceKm == null || trip.distanceKm! <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final repo = SupabaseRepository.ofDefaultClient();
+    final meta =
+        Supabase.instance.client.auth.currentUser?.userMetadata;
+    final usageProfile =
+        UsageProfile.tryParse(meta?['usage_profile'] as String?);
+    final primaryCity =
+        PrimaryCity.tryParse(meta?['primary_city'] as String?);
+
+    return FutureBuilder<(Vehicle?, List<EfficiencySample>)>(
+      future: () async {
+        final vehicles = await repo.listVehicles();
+        final vehicle = vehicles
+            .where((v) => v.id == trip.vehicleId)
+            .firstOrNull;
+        final samples = vehicle != null
+            ? await repo.recentEfficiencySamples(
+                vehicleId: vehicle.id, limit: 20)
+            : <EfficiencySample>[];
+        return (vehicle, samples);
+      }(),
+      builder: (context, snap) {
+        if (!snap.hasData || snap.data?.$1 == null) {
+          return const SizedBox.shrink();
+        }
+        final vehicle = snap.data!.$1!;
+        final samples = snap.data!.$2;
+
+        final estimate = PredictionService.posteriorKmPerLiter(
+          vehicle: vehicle,
+          samples: samples,
+          primaryCity: primaryCity,
+          usageProfile: usageProfile,
+        );
+
+        final liters = trip.distanceKm! / estimate.kmPerLiter;
+        final rupiah = NumberFormat.currency(
+          locale: 'id_ID',
+          symbol: '',
+          decimalDigits: 0,
+        );
+
+        // Try to get latest fuel price for cost estimate.
+        return FutureBuilder<FuelPrice?>(
+          future: () async {
+            final prefFuelId =
+                meta?['preferred_fuel_id'] as String?;
+            if (prefFuelId == null) return null;
+            return repo.getFuelPrice(
+              fuelProductId: prefFuelId,
+              onDate: trip.startedAt,
+            );
+          }(),
+          builder: (context, priceSnap) {
+            final price = priceSnap.data;
+            final costRp = price != null
+                ? liters * price.pricePerLiter
+                : null;
+
+            final sourceLabel = estimate.source == 'PRIOR'
+                ? 'profil kendaraan'
+                : '${estimate.sampleCount} ukuran';
+
+            return Column(
+              children: [
+                EditorialDataRow(
+                  label: 'Estimasi BBM',
+                  value: '${liters.toStringAsFixed(2)} L',
+                  valueStyle: AppEditorial.mono(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppEditorial.butterDeep,
+                    tabular: true,
+                  ),
+                ),
+                if (costRp != null)
+                  EditorialDataRow(
+                    label: 'Estimasi biaya',
+                    value: 'Rp ${rupiah.format(costRp).trim()}',
+                  ),
+                EditorialDataRow(
+                  label: 'Sumber efisiensi',
+                  value: sourceLabel,
+                  isLast: true,
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
