@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="Screenshot/BensinKu_header.png" width="320" alt="BensinKu hero"/>
+  <img src="Screenshot/BensinKu_header.png" width="700" alt="BensinKu hero"/>
 </p>
 
 ---
