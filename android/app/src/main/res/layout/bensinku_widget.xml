@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4x2 home widget. Editorial cream canvas with butter "MULAI" CTA. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Masthead row: BENSINKU + tanggal -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_brand"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:text="BENSINKU"
+            android:textColor="@color/widget_ink"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_date"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:gravity="end"
+            android:text=""
+            android:textColor="@color/widget_ink_soft"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <!-- Greeting line -->
+    <TextView
+        android:id="@+id/widget_greeting"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:fontFamily="monospace"
+        android:maxLines="1"
+        android:text="Selamat datang"
+        android:textColor="@color/widget_ink"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <!-- Spacer fills the middle so footer sticks to bottom. Must be
+         FrameLayout (not raw View) — RemoteViews only inflates a
+         whitelisted set of view classes. -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- MULAI PERJALANAN CTA -->
+    <TextView
+        android:id="@+id/widget_start_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/widget_button_bg"
+        android:fontFamily="monospace"
+        android:gravity="center"
+        android:paddingTop="11dp"
+        android:paddingBottom="11dp"
+        android:text="▶ MULAI PERJALANAN"
+        android:textColor="@color/widget_ink"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <!-- Footer stats: Mei: Rp 150rb · 5.2 L · 12 km/L -->
+    <TextView
+        android:id="@+id/widget_footer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:ellipsize="end"
+        android:fontFamily="monospace"
+        android:maxLines="1"
+        android:text="Belum ada catatan bulan ini"
+        android:textColor="@color/widget_ink_muted"
+        android:textSize="11sp" />
+</LinearLayout>

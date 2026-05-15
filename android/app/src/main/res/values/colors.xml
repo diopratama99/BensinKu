@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#F6EFDF</color>
+
+    <!-- Home widget palette — mirrors AppEditorial (lib/app/theme.dart) -->
+    <color name="widget_canvas">#F6EFDF</color>
+    <color name="widget_cream">#FFF7E6</color>
+    <color name="widget_butter">#E9B341</color>
+    <color name="widget_butter_deep">#B6841C</color>
+    <color name="widget_ink">#1A0F03</color>
+    <color name="widget_ink_soft">#4A3A20</color>
+    <color name="widget_ink_muted">#8E7B62</color>
+    <color name="widget_hairline">#D9CCAC</color>
 </resources>

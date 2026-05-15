@@ -112,7 +112,7 @@ class _SummaryTabState extends State<SummaryTab> {
               );
 
               return ListView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 140),
                 children: [
                   // Greeting + vehicle selector
                   const _GreetingBlock(),

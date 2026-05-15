@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../data/models.dart';
 import '../data/repository.dart';
+import 'notification_service.dart';
 
 /// Outcome of a location-permission request.
 ///
@@ -313,6 +314,13 @@ class TripService extends ChangeNotifier {
       _activeTrip = ended;
       _autoStopped = true;
       notifyListeners();
+      // Best-effort notify the user — they may have the phone in pocket
+      // and never see the in-app dialog otherwise.
+      try {
+        await NotificationService.instance.notifyAutoStop(trip: ended);
+      } catch (_) {
+        // Non-fatal: notif gagal != trip teardown gagal.
+      }
       onAutoStopped?.call(ended);
     } catch (_) {
       // If DB update fails, trip stays "active" — user can manually stop

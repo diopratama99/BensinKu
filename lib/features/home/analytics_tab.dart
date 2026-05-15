@@ -72,7 +72,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   refuels.length;
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 80),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 140),
             children: [
               // §01 Total
               const EditorialSectionHeader(

@@ -5,6 +5,8 @@ import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../onboarding/add_vehicle_page.dart';
+import 'about_page.dart';
+import 'privacy_page.dart';
 import 'vehicle_detail_page.dart';
 
 /// Profile — index card layout.
@@ -186,8 +188,27 @@ class _ProfileTabState extends State<ProfileTab> {
             ),
             const SizedBox(height: 24),
 
-            // §03 Akun
-            const EditorialSectionHeader(index: '03', label: 'AKUN'),
+            // §03 Lainnya
+            const EditorialSectionHeader(index: '03', label: 'LAINNYA'),
+            const SizedBox(height: 12),
+            _MenuTile(
+              icon: Icons.shield_outlined,
+              label: 'Privasi & data',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PrivacyPage()),
+              ),
+            ),
+            _MenuTile(
+              icon: Icons.info_outline_rounded,
+              label: 'Tentang BensinKu',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AboutPage()),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // §04 Akun
+            const EditorialSectionHeader(index: '04', label: 'AKUN'),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () async {
@@ -234,7 +255,7 @@ class _ProfileTabState extends State<ProfileTab> {
             const SizedBox(height: 32),
             Center(
               child: Text(
-                'BENSINKU · v1.0.0',
+                'BENSINKU · v1.0.0 · TemanLabs',
                 style: AppEditorial.mono(
                   fontSize: 10.5,
                   color: AppEditorial.inkMuted,
@@ -784,6 +805,50 @@ class _ProfilePicker<T> extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+class _MenuTile extends StatelessWidget {
+  const _MenuTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: AppEditorial.hairline, width: 1),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: AppEditorial.ink),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: AppEditorial.mono(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Icon(Icons.arrow_forward_rounded,
+                size: 16, color: AppEditorial.inkMuted),
+          ],
+        ),
+      ),
     );
   }
 }

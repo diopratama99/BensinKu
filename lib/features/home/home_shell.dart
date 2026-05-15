@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../../app/theme.dart';
 import '../../data/models.dart';
+import '../../services/home_widget_service.dart';
+import '../../services/widget_launch_intent.dart';
 import '../trip/trip_map_screen.dart';
 import 'add_refuel_tab.dart';
 import 'analytics_tab.dart';
@@ -21,12 +23,49 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell>
+    with WidgetsBindingObserver {
   // Index mapping: 0=Home, 1=Statistik, 2=Add(sheet), 3=Riwayat, 4=Peta
   int _index = 0;
   bool _sheetOpen = false;
 
   final _refreshCounters = {0: 0, 1: 0, 3: 0, 4: 0};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _maybeJumpFromWidget();
+    // Push a fresh widget snapshot on app open so values are current
+    // even if the user just edited something in another session.
+    HomeWidgetService.instance.refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Widget tap brings app to foreground without recreating HomeShell;
+    // poll the pending flag again on resume so we still hijack to the
+    // Rute tab + auto-start trip when warm-launched.
+    if (state == AppLifecycleState.resumed) {
+      _maybeJumpFromWidget();
+    }
+  }
+
+  Future<void> _maybeJumpFromWidget() async {
+    final shouldJump = await WidgetLaunchIntent.consumePending();
+    if (!shouldJump || !mounted) return;
+    setState(() {
+      _index = 4; // Rute tab
+      _refreshCounters[4] = (_refreshCounters[4] ?? 0) + 1;
+    });
+  }
 
   void _onTabTapped(int index) {
     if (index == 2) {

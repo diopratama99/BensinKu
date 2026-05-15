@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home widget background — cream canvas with ink hairline border,
+     small rounded corners (mirrors AppEditorial.rCard ~ 8dp). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_canvas" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/widget_ink" />
+    <corners android:radius="14dp" />
+</shape>

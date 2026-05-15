@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'app/app.dart';
 import 'config/app_config.dart';
+import 'services/notification_service.dart';
 import 'services/supabase_bootstrap.dart';
 
 Future<void> main() async {
@@ -23,6 +24,14 @@ Future<void> main() async {
   );
 
   await initializeDateFormatting('id_ID', null);
+
+  // Init local notifications (auto-stop alerts, dll). Best-effort —
+  // failure di sini gak boleh block app boot.
+  try {
+    await NotificationService.instance.init();
+  } catch (_) {
+    // Fall through; app jalan tanpa notif.
+  }
 
   final config = AppConfig.fromEnv();
   final supabaseReady = await SupabaseBootstrap.tryInitialize(config);

@@ -10,6 +10,7 @@ import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../services/trip_service.dart';
+import '../../services/widget_launch_intent.dart';
 
 /// Rute — GPS trip recorder with telemetry overlay.
 /// Map is monochrome; overlays are mono LCD-style readouts.
@@ -56,6 +57,18 @@ class _TripMapScreenState extends State<TripMapScreen>
     // state stays in sync with reality.
     if (state == AppLifecycleState.resumed) {
       _refreshPermissionStatus();
+      // App may have been brought to foreground via the widget's
+      // "MULAI PERJALANAN" tap. Re-poll to honor that even when warm.
+      _maybeAutoStartFromWidget();
+    }
+  }
+
+  Future<void> _maybeAutoStartFromWidget() async {
+    if (_service != null) return; // Trip already active.
+    final shouldStart = await WidgetLaunchIntent.consumePending();
+    if (!shouldStart || !mounted) return;
+    if (_locationReady && _selectedVehicle != null) {
+      unawaited(_startTrip());
     }
   }
 
@@ -139,6 +152,16 @@ class _TripMapScreenState extends State<TripMapScreen>
 
     // Then keep that dot updated while we're not in a trip.
     _startIdlePositionStream();
+
+    // If app was launched from the home widget's "MULAI PERJALANAN"
+    // button, auto-start the trip now (after permission is settled).
+    if (mounted && _locationReady && _selectedVehicle != null) {
+      final shouldAutoStart =
+          await WidgetLaunchIntent.consumePending();
+      if (shouldAutoStart && mounted) {
+        unawaited(_startTrip());
+      }
+    }
   }
 
   /// Subscribe to a low-power position stream so the "you are here" dot

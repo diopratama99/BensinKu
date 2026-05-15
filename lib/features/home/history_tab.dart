@@ -79,7 +79,7 @@ class _HistoryTabState extends State<HistoryTab> {
                       refuels.fold<num>(0, (s, r) => s + r.liters);
 
                   return ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 100),
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 140),
                     children: [
                       // §01 Ringkasan
                       EditorialSectionHeader(

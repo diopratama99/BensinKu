@@ -21,10 +21,11 @@
          be declared here. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <application
-        android:label="bensinku"
+        android:label="BensinKu"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
@@ -49,6 +50,13 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Required by home_widget plugin so HomeWidgetLaunchIntent
+                 PendingIntents (used by widget click handlers) can route
+                 back to this activity. Without this, taps on the widget
+                 silently no-op. -->
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.LAUNCH" />
+            </intent-filter>
         </activity>
         <!-- Geolocator's foreground service that keeps GPS streaming
              while screen is off / app backgrounded. Plugin registers the
@@ -59,6 +67,21 @@
             android:foregroundServiceType="location"
             android:exported="false"
             tools:node="merge" />
+
+        <!-- BensinKu home screen widget (4x2). Provider class lives in
+             com.temanlabs.bensinku.BensinKuWidgetProvider. Receiver
+             MUST be exported=true so the launcher process can bind to
+             it; otherwise widget picker shows "Can't load widget". -->
+        <receiver
+            android:name=".BensinKuWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bensinku_widget_info" />
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
