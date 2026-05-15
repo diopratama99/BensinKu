@@ -201,6 +201,7 @@ class _HomeShellState extends State<HomeShell> {
       ),
       child: Scaffold(
         backgroundColor: AppEditorial.canvas,
+        extendBody: true,
         appBar: _buildAppBar(),
         body: IndexedStack(
           index: stackIndex,
@@ -305,104 +306,104 @@ class _HomeShellState extends State<HomeShell> {
     const barHeight = 72.0;
     const liftOverhang = 12.0;
     const addButtonSize = 64.0;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return Container(
-      color: AppEditorial.canvas,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: SizedBox(
-            // bar + how far the FAB pokes above + a tiny pad for shadow
-            height: barHeight + liftOverhang + 6,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // ── Background bar ──────────────────────────────────
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
+    // Total widget height: bar + how far the FAB pokes above + tiny pad
+    // for shadow + bottom safe-area. The bar (canvas-painted) covers from
+    // the divider all the way to the screen bottom, so no body content
+    // shows through under the bar. Only the area ABOVE the divider (where
+    // the FAB pokes out) is transparent.
+    return SizedBox(
+      height: barHeight + liftOverhang + 6 + bottomInset,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // ── Background bar (canvas + divider; covers safe-area too) ─
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            // bar height + bottom safe-area, painted in canvas
+            height: barHeight + bottomInset,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: AppEditorial.canvas,
+                border: Border(
+                  top: BorderSide(color: AppEditorial.ink, width: 1),
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: SizedBox(
                   height: barHeight,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: AppEditorial.canvas,
-                      border: Border(
-                        top: BorderSide(
-                          color: AppEditorial.ink,
-                          width: 1,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _NavItem(
+                            index: 0,
+                            currentIndex: _index,
+                            icon: Icons.home_outlined,
+                            iconActive: Icons.home_rounded,
+                            label: 'BERANDA',
+                            onTap: _onTabTapped,
+                          ),
                         ),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _NavItem(
-                              index: 0,
-                              currentIndex: _index,
-                              icon: Icons.home_outlined,
-                              iconActive: Icons.home_rounded,
-                              label: 'BERANDA',
-                              onTap: _onTabTapped,
-                            ),
+                        Expanded(
+                          child: _NavItem(
+                            index: 1,
+                            currentIndex: _index,
+                            icon: Icons.show_chart_rounded,
+                            iconActive: Icons.show_chart_rounded,
+                            label: 'ANALISA',
+                            onTap: _onTabTapped,
                           ),
-                          Expanded(
-                            child: _NavItem(
-                              index: 1,
-                              currentIndex: _index,
-                              icon: Icons.show_chart_rounded,
-                              iconActive: Icons.show_chart_rounded,
-                              label: 'ANALISA',
-                              onTap: _onTabTapped,
-                            ),
+                        ),
+                        // Gap reserved for the lifted FAB
+                        const Expanded(child: SizedBox()),
+                        Expanded(
+                          child: _NavItem(
+                            index: 3,
+                            currentIndex: _index,
+                            icon: Icons.receipt_long_outlined,
+                            iconActive: Icons.receipt_long_rounded,
+                            label: 'ARSIP',
+                            onTap: _onTabTapped,
                           ),
-                          // Gap reserved for the lifted FAB
-                          const Expanded(child: SizedBox()),
-                          Expanded(
-                            child: _NavItem(
-                              index: 3,
-                              currentIndex: _index,
-                              icon: Icons.receipt_long_outlined,
-                              iconActive: Icons.receipt_long_rounded,
-                              label: 'ARSIP',
-                              onTap: _onTabTapped,
-                            ),
+                        ),
+                        Expanded(
+                          child: _NavItem(
+                            index: 4,
+                            currentIndex: _index,
+                            icon: Icons.place_outlined,
+                            iconActive: Icons.place_rounded,
+                            label: 'RUTE',
+                            onTap: _onTabTapped,
                           ),
-                          Expanded(
-                            child: _NavItem(
-                              index: 4,
-                              currentIndex: _index,
-                              icon: Icons.place_outlined,
-                              iconActive: Icons.place_rounded,
-                              label: 'RUTE',
-                              onTap: _onTabTapped,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                // ── Lifted FAB ──────────────────────────────────────
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: addButtonSize,
-                  child: Center(
-                    child: _AddButton(
-                      size: addButtonSize,
-                      onTap: _openAddActions,
-                      isOpen: _sheetOpen,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+          // ── Lifted FAB (poking above the bar) ───────────────────────
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: addButtonSize,
+            child: Center(
+              child: _AddButton(
+                size: addButtonSize,
+                onTap: _openAddActions,
+                isOpen: _sheetOpen,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

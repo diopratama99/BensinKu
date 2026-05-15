@@ -82,10 +82,14 @@ class TripDetailPage extends StatelessWidget {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.map_outlined,
-                                    size: 32,
-                                    color: AppEditorial.inkMuted),
-                                const SizedBox(height: 8),
+                                SizedBox(
+                                  height: 140,
+                                  child: Image.asset(
+                                    'assets/illustrations/empty_rute.png',
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
                                 Text(
                                   'tidak ada data rute.',
                                   style: AppEditorial.sans(
@@ -112,7 +116,7 @@ class TripDetailPage extends StatelessWidget {
                                 urlTemplate:
                                     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                                 userAgentPackageName:
-                                    'com.bensinku.bensinku',
+                                    'com.temanlabs.bensinku',
                               ),
                               if (latLngs.length >= 2)
                                 PolylineLayer(

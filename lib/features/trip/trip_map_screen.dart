@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -18,7 +20,8 @@ class TripMapScreen extends StatefulWidget {
   State<TripMapScreen> createState() => _TripMapScreenState();
 }
 
-class _TripMapScreenState extends State<TripMapScreen> {
+class _TripMapScreenState extends State<TripMapScreen>
+    with WidgetsBindingObserver {
   final _repo = SupabaseRepository.ofDefaultClient();
   final _mapController = MapController();
 
@@ -29,11 +32,58 @@ class _TripMapScreenState extends State<TripMapScreen> {
   bool _locationReady = false;
   bool _stopping = false;
   Position? _lastKnownPosition;
+  LocationPermissionStatus? _permissionStatus;
+
+  /// Lightweight live position stream that runs ONLY when no trip is
+  /// active. Used to render the "you are here" dot before a trip starts.
+  /// During a trip, [TripService] owns the high-accuracy stream and we
+  /// derive the current position from its latest waypoint instead, so
+  /// the two streams don't compete.
+  StreamSubscription<Position>? _idlePositionSub;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // User may have toggled the location permission in system Settings
+    // and bounced back to the app. Re-check so the warning chip / dialog
+    // state stays in sync with reality.
+    if (state == AppLifecycleState.resumed) {
+      _refreshPermissionStatus();
+    }
+  }
+
+  Future<void> _refreshPermissionStatus() async {
+    try {
+      final perm = await Geolocator.checkPermission();
+      LocationPermissionStatus status;
+      if (perm == LocationPermission.deniedForever) {
+        status = LocationPermissionStatus.permanentlyDenied;
+      } else if (perm == LocationPermission.denied) {
+        status = LocationPermissionStatus.denied;
+      } else if (perm == LocationPermission.whileInUse) {
+        status = LocationPermissionStatus.whileInUseOnly;
+      } else if (perm == LocationPermission.always) {
+        status = LocationPermissionStatus.alwaysGranted;
+      } else {
+        status = LocationPermissionStatus.denied;
+      }
+      if (!mounted) return;
+      setState(() {
+        _permissionStatus = status;
+        _locationReady =
+            status == LocationPermissionStatus.alwaysGranted ||
+                status == LocationPermissionStatus.whileInUseOnly;
+      });
+    } catch (_) {
+      // Silently ignore — caller will hit the same checks again.
+    }
   }
 
   Future<void> _init() async {
@@ -55,20 +105,69 @@ class _TripMapScreenState extends State<TripMapScreen> {
       _showSnack('GPS tidak aktif. Aktifkan lokasi di pengaturan.');
       return;
     }
-    final granted = await TripService.requestPermission();
-    if (mounted) setState(() => _locationReady = granted);
-    if (!granted) {
-      _showSnack('Izin lokasi diperlukan untuk tracking.');
-      return;
+    final status = await TripService.requestPermission();
+    if (mounted) {
+      setState(() {
+        _locationReady = status == LocationPermissionStatus.alwaysGranted ||
+            status == LocationPermissionStatus.whileInUseOnly;
+        _permissionStatus = status;
+      });
+    }
+    switch (status) {
+      case LocationPermissionStatus.denied:
+        _showSnack('Izin lokasi ditolak. Tracking tidak bisa berjalan.');
+        return;
+      case LocationPermissionStatus.permanentlyDenied:
+        _showPermissionBlockedDialog();
+        return;
+      case LocationPermissionStatus.whileInUseOnly:
+        // Allow tracking to start, but warn that it'll stop when screen
+        // is off. User can upgrade to "Always" via settings.
+        _showBackgroundUpgradeDialog();
+      case LocationPermissionStatus.alwaysGranted:
+        // Best case — tracking will keep running with screen off.
+        break;
     }
 
+    // First fix: show user where they are immediately.
     try {
       final pos = await Geolocator.getCurrentPosition();
-      _lastKnownPosition = pos;
-      if (mounted) {
-        _mapController.move(LatLng(pos.latitude, pos.longitude), 15);
-      }
+      if (!mounted) return;
+      setState(() => _lastKnownPosition = pos);
+      _mapController.move(LatLng(pos.latitude, pos.longitude), 15);
     } catch (_) {}
+
+    // Then keep that dot updated while we're not in a trip.
+    _startIdlePositionStream();
+  }
+
+  /// Subscribe to a low-power position stream so the "you are here" dot
+  /// stays current while the user is just looking at the map. This is
+  /// disposed before [TripService] starts its high-accuracy stream so
+  /// they don't run concurrently.
+  void _startIdlePositionStream() {
+    _idlePositionSub?.cancel();
+    _idlePositionSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.medium,
+        // Bigger filter than tracking-mode — we just need rough updates
+        // when the user moves around the map view.
+        distanceFilter: 25,
+      ),
+    ).listen(
+      (pos) {
+        if (!mounted) return;
+        setState(() => _lastKnownPosition = pos);
+      },
+      onError: (_) {
+        // Silently ignore — the user might toggle GPS off mid-session.
+      },
+    );
+  }
+
+  void _stopIdlePositionStream() {
+    _idlePositionSub?.cancel();
+    _idlePositionSub = null;
   }
 
   Future<void> _startTrip() async {
@@ -76,10 +175,32 @@ class _TripMapScreenState extends State<TripMapScreen> {
       _showSnack('Pilih kendaraan dulu.');
       return;
     }
-    if (!_locationReady) {
-      _showSnack('Izin lokasi belum diberikan.');
-      return;
+
+    // Re-check permission live in case the user toggled it in Settings
+    // since the page was first loaded.
+    final status = await TripService.requestPermission();
+    if (!mounted) return;
+    setState(() {
+      _permissionStatus = status;
+      _locationReady = status == LocationPermissionStatus.alwaysGranted ||
+          status == LocationPermissionStatus.whileInUseOnly;
+    });
+    switch (status) {
+      case LocationPermissionStatus.denied:
+        _showSnack('Izin lokasi ditolak. Tracking tidak bisa berjalan.');
+        return;
+      case LocationPermissionStatus.permanentlyDenied:
+        await _showPermissionBlockedDialog();
+        return;
+      case LocationPermissionStatus.whileInUseOnly:
+        // Re-show the upgrade dialog. If the user dismisses with
+        // "Lanjut saja" we still allow the trip to start.
+        await _showBackgroundUpgradeDialog();
+      case LocationPermissionStatus.alwaysGranted:
+        break;
     }
+
+    if (!_locationReady) return;
 
     final svc = TripService(
       repo: _repo,
@@ -88,11 +209,15 @@ class _TripMapScreenState extends State<TripMapScreen> {
     svc.addListener(_onServiceUpdate);
 
     try {
+      // Hand off the GPS stream to the high-accuracy tracking service.
+      _stopIdlePositionStream();
       await svc.startTrip();
       setState(() => _service = svc);
     } catch (e) {
       svc.removeListener(_onServiceUpdate);
       svc.dispose();
+      // Resume idle dot updates if start failed.
+      _startIdlePositionStream();
       _showSnack('Gagal mulai: $e');
     }
   }
@@ -119,6 +244,9 @@ class _TripMapScreenState extends State<TripMapScreen> {
       final positions = _service?.positions ?? [];
       if (positions.isNotEmpty) {
         final last = positions.last;
+        // Mirror the live trip position into _lastKnownPosition so the
+        // "you are here" marker keeps updating during a trip too.
+        _lastKnownPosition = last;
         _mapController.move(
           LatLng(last.latitude, last.longitude),
           _mapController.camera.zoom,
@@ -129,6 +257,8 @@ class _TripMapScreenState extends State<TripMapScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _idlePositionSub?.cancel();
     _service?.removeListener(_onServiceUpdate);
     _service?.dispose();
     super.dispose();
@@ -138,6 +268,78 @@ class _TripMapScreenState extends State<TripMapScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
+    );
+  }
+
+  /// Shown when the user already picked "Don't ask again" — the only path
+  /// forward is the OS Settings screen.
+  Future<void> _showPermissionBlockedDialog() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Izin lokasi diblokir',
+          style: AppEditorial.mono(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: const Text(
+          'Buka pengaturan untuk mengaktifkan izin lokasi. Pilih '
+          '"Allow all the time" supaya rute tetap tercatat saat layar mati.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('NANTI'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              await TripService.openLocationSettings();
+            },
+            child: const Text('BUKA PENGATURAN'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shown when only "While using the app" was granted. We let the user
+  /// proceed but warn that tracking will pause with the screen off, and
+  /// offer a one-tap path to upgrade.
+  Future<void> _showBackgroundUpgradeDialog() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Rute akan berhenti saat layar mati',
+          style: AppEditorial.mono(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: const Text(
+          'Untuk perekaman rute yang akurat saat berkendara, izinkan '
+          '"Allow all the time" di pengaturan. Tanpa itu, GPS akan berhenti '
+          'mencatat begitu layar mati atau aplikasi pindah ke background.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('LANJUT SAJA'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              await TripService.openLocationSettings();
+            },
+            child: const Text('BUKA PENGATURAN'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -185,6 +387,9 @@ class _TripMapScreenState extends State<TripMapScreen> {
                   _service?.dispose();
                   _service = null;
                 });
+                // Trip is over — resume the lightweight stream so the
+                // "you are here" dot keeps refreshing.
+                _startIdlePositionStream();
               },
               child: const Text('OK'),
             ),
@@ -232,7 +437,7 @@ class _TripMapScreenState extends State<TripMapScreen> {
               TileLayer(
                 urlTemplate:
                     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.bensinku.bensinku',
+                userAgentPackageName: 'com.temanlabs.bensinku',
                 maxZoom: 19,
               ),
               if (polylinePoints.length >= 2)
@@ -245,7 +450,24 @@ class _TripMapScreenState extends State<TripMapScreen> {
                     ),
                   ],
                 ),
-              if (positions.isNotEmpty)
+              // ── "You are here" marker — visible whenever we know
+              //    where the user is, even before a trip starts. During
+              //    a trip this gets overlaid by the live trip dot below.
+              if (_lastKnownPosition != null && !isTracking)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: LatLng(
+                        _lastKnownPosition!.latitude,
+                        _lastKnownPosition!.longitude,
+                      ),
+                      width: 32,
+                      height: 32,
+                      child: const _PulseDot(),
+                    ),
+                  ],
+                ),
+              if (isTracking && positions.isNotEmpty)
                 MarkerLayer(
                   markers: [
                     Marker(
@@ -307,12 +529,58 @@ class _TripMapScreenState extends State<TripMapScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  if (_permissionStatus ==
+                      LocationPermissionStatus.whileInUseOnly)
+                    GestureDetector(
+                      onTap: _showBackgroundUpgradeDialog,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppEditorial.rust
+                              .withValues(alpha: 0.12),
+                          border: Border.all(
+                              color: AppEditorial.rust, width: 1),
+                          borderRadius: BorderRadius.circular(
+                              AppEditorial.rTiny),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.warning_amber_rounded,
+                                size: 12, color: AppEditorial.rust),
+                            const SizedBox(width: 4),
+                            Text(
+                              'IZIN BG',
+                              style: AppEditorial.mono(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppEditorial.rust,
+                                letterSpacing: 0.6,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   const Spacer(),
                   GestureDetector(
                     onTap: () async {
+                      // Optimistic snap if we already know roughly where we
+                      // are, then refresh with a fresh fix.
+                      final last = _lastKnownPosition;
+                      if (last != null) {
+                        _mapController.move(
+                          LatLng(last.latitude, last.longitude),
+                          16,
+                        );
+                      }
                       try {
                         final pos =
                             await Geolocator.getCurrentPosition();
+                        if (!mounted) return;
+                        setState(() => _lastKnownPosition = pos);
                         _mapController.move(
                           LatLng(pos.latitude, pos.longitude),
                           16,
@@ -557,6 +825,79 @@ class _Telemetry extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Animated "you are here" dot. A solid butter core with a slowly
+/// expanding ink halo so it reads as live position even when stationary.
+class _PulseDot extends StatefulWidget {
+  const _PulseDot();
+
+  @override
+  State<_PulseDot> createState() => _PulseDotState();
+}
+
+class _PulseDotState extends State<_PulseDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) {
+        final t = _ctrl.value;
+        // Halo expands 0 → 1 then resets, fading as it grows.
+        final haloScale = 0.5 + 0.5 * t;
+        final haloOpacity = (1.0 - t).clamp(0.0, 1.0);
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Transform.scale(
+              scale: haloScale,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppEditorial.butter
+                      .withValues(alpha: 0.45 * haloOpacity),
+                ),
+              ),
+            ),
+            Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppEditorial.butter,
+                border: Border.all(color: AppEditorial.ink, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppEditorial.ink.withValues(alpha: 0.18),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

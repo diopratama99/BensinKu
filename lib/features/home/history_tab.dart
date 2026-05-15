@@ -144,13 +144,25 @@ class _HistoryTabState extends State<HistoryTab> {
                       if (refuels.isEmpty)
                         Padding(
                           padding:
-                              const EdgeInsets.symmetric(vertical: 24),
-                          child: Text(
-                            'belum ada entri.',
-                            style: AppEditorial.sans(
-                              fontSize: 13,
-                              color: AppEditorial.inkSoft,
-                            ),
+                              const EdgeInsets.symmetric(vertical: 16),
+                          child: Column(
+                            children: [
+                              AspectRatio(
+                                aspectRatio: 800 / 600,
+                                child: Image.asset(
+                                  'assets/illustrations/empty_arsip.png',
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'belum ada entri.',
+                                style: AppEditorial.sans(
+                                  fontSize: 13,
+                                  color: AppEditorial.inkSoft,
+                                ),
+                              ),
+                            ],
                           ),
                         )
                       else

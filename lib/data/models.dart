@@ -20,18 +20,148 @@ enum VehicleType {
       };
 }
 
+/// Body type — only meaningful for cars (motor → null).
+/// String values match CHECK constraint in
+/// `supabase/migrations/20260515090000_predictions_v2.sql`.
+enum BodyType {
+  sedan('sedan'),
+  hatchback('hatchback'),
+  mpv('mpv'),
+  suv('suv'),
+  pickup('pickup'),
+  sport('sport');
+
+  const BodyType(this.dbValue);
+  final String dbValue;
+
+  static BodyType? tryParse(String? value) {
+    if (value == null) return null;
+    for (final t in BodyType.values) {
+      if (t.dbValue == value) return t;
+    }
+    return null;
+  }
+
+  String get label => switch (this) {
+        BodyType.sedan => 'Sedan',
+        BodyType.hatchback => 'City Car',
+        BodyType.mpv => 'Keluarga',
+        BodyType.suv => 'SUV',
+        BodyType.pickup => 'Pickup',
+        BodyType.sport => 'Sport',
+      };
+}
+
+/// Transmission type. Mapped to CHECK constraint values.
+enum Transmission {
+  manual('manual'),
+  at('at'),
+  cvt('cvt'),
+  dct('dct');
+
+  const Transmission(this.dbValue);
+  final String dbValue;
+
+  static Transmission? tryParse(String? value) {
+    if (value == null) return null;
+    for (final t in Transmission.values) {
+      if (t.dbValue == value) return t;
+    }
+    return null;
+  }
+
+  String get label => switch (this) {
+        Transmission.manual => 'Manual',
+        Transmission.at => 'Matic',
+        Transmission.cvt => 'Matic CVT',
+        Transmission.dct => 'Matic Dual-Kopling',
+      };
+}
+
+/// Octane rating populer di Indonesia. Validated against CHECK constraint
+/// (88, 90, 92, 95, 98).
+class OctaneRating {
+  static const validRons = <int>[88, 90, 92, 95, 98];
+
+  static String labelFor(int ron) => switch (ron) {
+        88 => 'RON 88 (Premium)',
+        90 => 'RON 90 (Pertalite)',
+        92 => 'RON 92 (Pertamax)',
+        95 => 'RON 95 (V-Power / Pertamax Turbo lama)',
+        98 => 'RON 98 (Pertamax Turbo)',
+        _ => 'RON $ron',
+      };
+}
+
+/// User usage profile — tersimpan di `user_metadata.usage_profile`.
+enum UsageProfile {
+  dailyCommute('daily_commute', 'Komuter harian'),
+  weekendOnly('weekend', 'Akhir pekan saja'),
+  mixed('mixed', 'Campuran'),
+  fieldwork('fieldwork', 'Kerja lapangan');
+
+  const UsageProfile(this.dbValue, this.label);
+  final String dbValue;
+  final String label;
+
+  static UsageProfile? tryParse(String? value) {
+    if (value == null) return null;
+    for (final t in UsageProfile.values) {
+      if (t.dbValue == value) return t;
+    }
+    return null;
+  }
+}
+
+/// City/area cluster — proxy untuk macet level. Stored in
+/// `user_metadata.primary_city`.
+enum PrimaryCity {
+  jakarta('jakarta', 'Jakarta'),
+  bandung('bandung', 'Bandung'),
+  surabaya('surabaya', 'Surabaya'),
+  midSized('mid_sized', 'Kota sedang'),
+  rural('rural', 'Luar kota / desa');
+
+  const PrimaryCity(this.dbValue, this.label);
+  final String dbValue;
+  final String label;
+
+  static PrimaryCity? tryParse(String? value) {
+    if (value == null) return null;
+    for (final t in PrimaryCity.values) {
+      if (t.dbValue == value) return t;
+    }
+    return null;
+  }
+}
+
 class Vehicle {
   const Vehicle({
     required this.id,
     required this.type,
     required this.name,
     required this.tankCapacityLiters,
+    this.engineCc,
+    this.manufacturingYear,
+    this.bodyType,
+    this.transmission,
+    this.recommendedRon,
+    this.makeModel,
   });
 
   final String id;
   final VehicleType type;
   final String name;
   final num? tankCapacityLiters;
+
+  // Detail mesin (Predictions v2). Semua nullable supaya backward-compatible
+  // dengan kendaraan yang sudah ada sebelum migration.
+  final int? engineCc;
+  final int? manufacturingYear;
+  final BodyType? bodyType;
+  final Transmission? transmission;
+  final int? recommendedRon;
+  final String? makeModel;
 
   factory Vehicle.fromJson(Map<String, dynamic> json) {
     final type = VehicleType.tryParse(json['vehicle_type'] as String?);
@@ -44,7 +174,30 @@ class Vehicle {
           ? (json['name'] as String).trim()
           : type.label,
       tankCapacityLiters: json['tank_capacity_liters'] as num?,
+      engineCc: (json['engine_cc'] as num?)?.toInt(),
+      manufacturingYear: (json['manufacturing_year'] as num?)?.toInt(),
+      bodyType: BodyType.tryParse(json['body_type'] as String?),
+      transmission:
+          Transmission.tryParse(json['transmission'] as String?),
+      recommendedRon: (json['recommended_ron'] as num?)?.toInt(),
+      makeModel: (json['make_model'] as String?)?.trim().isEmpty == true
+          ? null
+          : (json['make_model'] as String?)?.trim(),
     );
+  }
+}
+
+/// Computed completeness check used by the auth gate. A vehicle is considered
+/// "complete" only if all reference fields needed for the prediction prior
+/// are filled. Body type is required for mobil only (motors don't have it).
+extension VehicleCompleteness on Vehicle {
+  bool get hasCompleteReferenceData {
+    if (tankCapacityLiters == null) return false;
+    if (engineCc == null) return false;
+    if (manufacturingYear == null) return false;
+    if (transmission == null) return false;
+    if (type == VehicleType.mobil && bodyType == null) return false;
+    return true;
   }
 }
 
@@ -241,6 +394,45 @@ class ParsedRefuel {
       isFullTank: (json['is_full_tank'] as bool?) ?? false,
       confidence: (json['confidence'] as String?) ?? 'medium',
       reasoning: (json['reasoning'] as String?) ?? '',
+    );
+  }
+}
+
+/// Ground-truth fuel efficiency sample, recorded between two consecutive
+/// full-tank fills for a single vehicle. Used by the prediction service to
+/// blend with the cold-start prior.
+class EfficiencySample {
+  const EfficiencySample({
+    required this.id,
+    required this.vehicleId,
+    required this.kmTraveled,
+    required this.litersFilled,
+    required this.kmPerLiter,
+    required this.measuredAt,
+    this.fromRefuelId,
+    this.toRefuelId,
+  });
+
+  final String id;
+  final String vehicleId;
+  final String? fromRefuelId;
+  final String? toRefuelId;
+  final double kmTraveled;
+  final double litersFilled;
+  final double kmPerLiter;
+  final DateTime measuredAt;
+
+  factory EfficiencySample.fromJson(Map<String, dynamic> json) {
+    return EfficiencySample(
+      id: json['id'] as String,
+      vehicleId: json['vehicle_id'] as String,
+      fromRefuelId: json['from_refuel_id'] as String?,
+      toRefuelId: json['to_refuel_id'] as String?,
+      kmTraveled: (json['km_traveled'] as num).toDouble(),
+      litersFilled: (json['liters_filled'] as num).toDouble(),
+      kmPerLiter: (json['km_per_liter'] as num).toDouble(),
+      measuredAt:
+          DateTime.parse(json['measured_at'] as String).toLocal(),
     );
   }
 }

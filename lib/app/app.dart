@@ -5,10 +5,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_config.dart';
+import '../data/models.dart';
 import '../data/repository.dart';
 import '../features/auth/sign_in_page.dart';
 import '../features/home/home_shell.dart';
 import '../features/onboarding/add_vehicle_page.dart';
+import '../features/onboarding/complete_vehicle_data_page.dart';
+import '../features/onboarding/setup_preferences_page.dart';
 import '../features/onboarding/welcome_page.dart';
 import 'theme.dart';
 
@@ -52,10 +55,12 @@ class _AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<_AuthGate> {
   late final StreamSubscription<AuthState> _sub;
+  Session? _session;
 
   @override
   void initState() {
     super.initState();
+    _session = Supabase.instance.client.auth.currentSession;
     _sub = Supabase.instance.client.auth.onAuthStateChange.listen(_onAuth);
   }
 
@@ -67,29 +72,47 @@ class _AuthGateState extends State<_AuthGate> {
 
   void _onAuth(AuthState data) {
     if (!mounted) return;
-    setState(() {}); // rebuild widget tree
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final nav = Navigator.of(context, rootNavigator: true);
-      final hasSession =
-          Supabase.instance.client.auth.currentSession != null;
-      if (!hasSession) {
-        // Setelah logout: pop semua route ke root, root sudah rebuild ke SignInPage
+
+    final newSession = data.session;
+    final wasSignedIn = _session != null;
+    final nowSignedIn = newSession != null;
+
+    setState(() => _session = newSession);
+
+    // When transitioning to signed-out: aggressively pop all pushed routes
+    // so any cached HomeShell / ProfileTab / etc. don't linger on top of
+    // the rebuilt SignInPage. Without this users get stuck on a stale
+    // HomeShell with no data until they restart the app.
+    if (wasSignedIn && !nowSignedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final nav = Navigator.of(context, rootNavigator: true);
         nav.popUntil((r) => r.isFirst);
-      }
-    });
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session == null) return const SignInPage();
-    return const _RegisteredGate();
+    if (_session == null) return const SignInPage();
+    // Key forces a fresh subtree on each session id so post-login data
+    // fetches start clean instead of reusing whatever was cached for a
+    // prior session.
+    return _RegisteredGate(key: ValueKey(_session!.user.id));
   }
 }
 
-class _RegisteredGate extends StatelessWidget {
-  const _RegisteredGate();
+class _RegisteredGate extends StatefulWidget {
+  const _RegisteredGate({super.key});
+
+  @override
+  State<_RegisteredGate> createState() => _RegisteredGateState();
+}
+
+class _RegisteredGateState extends State<_RegisteredGate> {
+  // Bumped to force the FutureBuilder below to re-fetch vehicles after the
+  // user completes a forced top-up form.
+  int _refreshKey = 0;
 
   bool _hasName(SupabaseClient client) {
     final user = client.auth.currentUser;
@@ -98,16 +121,33 @@ class _RegisteredGate extends StatelessWidget {
     return name.isNotEmpty;
   }
 
+  bool _hasRequiredPreferences(SupabaseClient client) {
+    final meta = client.auth.currentUser?.userMetadata;
+    final usage = meta?['usage_profile'];
+    final city = meta?['primary_city'];
+    return usage is String &&
+        usage.trim().isNotEmpty &&
+        city is String &&
+        city.trim().isNotEmpty;
+  }
+
+  void _refresh() {
+    if (!mounted) return;
+    setState(() => _refreshKey++);
+  }
+
   @override
   Widget build(BuildContext context) {
     final client = Supabase.instance.client;
 
+    // Step 1: must have a display name.
     if (!_hasName(client)) {
       return const WelcomePage();
     }
 
     final repo = SupabaseRepository.ofDefaultClient();
     return FutureBuilder(
+      key: ValueKey('vehicles-$_refreshKey'),
       future: repo.listVehicles(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -127,8 +167,29 @@ class _RegisteredGate extends StatelessWidget {
           );
         }
 
+        // Step 2: must have at least one vehicle.
         if (vehicles.isEmpty) {
-          return const AddVehiclePage(goHomeOnComplete: true);
+          return AddVehiclePage(
+            goHomeOnComplete: true,
+            onCompleted: _refresh,
+          );
+        }
+
+        // Step 3: every vehicle must have complete reference data.
+        final incomplete = vehicles
+            .where((v) => !v.hasCompleteReferenceData)
+            .toList();
+        if (incomplete.isNotEmpty) {
+          return CompleteVehicleDataPage(
+            vehicle: incomplete.first,
+            remainingCount: incomplete.length,
+            onSaved: _refresh,
+          );
+        }
+
+        // Step 4: must have completed required preferences.
+        if (!_hasRequiredPreferences(client)) {
+          return SetupPreferencesPage(onCompleted: _refresh);
         }
 
         return const HomeShell();

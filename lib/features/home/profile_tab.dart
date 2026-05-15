@@ -216,11 +216,12 @@ class _ProfileTabState extends State<ProfileTab> {
                   ),
                 );
                 if (confirm != true) return;
+                // _AuthGate listens to onAuthStateChange and will rebuild
+                // to SignInPage + pop any pushed routes automatically once
+                // the session clears. Don't pop here — that would race
+                // with the gate's own pop and can leave the stack in a
+                // half-cleared state.
                 await Supabase.instance.client.auth.signOut();
-                if (context.mounted) {
-                  Navigator.of(context, rootNavigator: true)
-                      .popUntil((r) => r.isFirst);
-                }
               },
               icon: const Icon(Icons.logout_rounded,
                   size: 16, color: AppEditorial.rust),
@@ -325,8 +326,13 @@ class _PreferencesBlock extends StatelessWidget {
     final weeklyKm = meta?['weekly_km'];
     final weeklyCount = meta?['weekly_refuel_count'];
     final prefFuelId = meta?['preferred_fuel_id'];
-    final hasPrefs =
-        weeklyKm != null || weeklyCount != null || prefFuelId != null;
+    final usageProfile = UsageProfile.tryParse(meta?['usage_profile'] as String?);
+    final primaryCity = PrimaryCity.tryParse(meta?['primary_city'] as String?);
+    final hasPrefs = weeklyKm != null ||
+        weeklyCount != null ||
+        prefFuelId != null ||
+        usageProfile != null ||
+        primaryCity != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -354,8 +360,8 @@ class _PreferencesBlock extends StatelessWidget {
             ),
           )
         else
-          Column(
-            children: [
+          Builder(builder: (_) {
+            final rows = <Widget>[
               if (weeklyKm is num)
                 EditorialDataRow(
                   label: 'Jarak per minggu',
@@ -370,10 +376,32 @@ class _PreferencesBlock extends StatelessWidget {
                 const EditorialDataRow(
                   label: 'BBM favorit',
                   value: 'TERPILIH',
-                  isLast: true,
                 ),
-            ],
-          ),
+              if (usageProfile != null)
+                EditorialDataRow(
+                  label: 'Profil pakai',
+                  value: usageProfile.label,
+                ),
+              if (primaryCity != null)
+                EditorialDataRow(
+                  label: 'Kota utama',
+                  value: primaryCity.label,
+                ),
+            ];
+            // Mark the last row so it doesn't draw a divider.
+            if (rows.isNotEmpty) {
+              final last = rows.last;
+              if (last is EditorialDataRow) {
+                rows[rows.length - 1] = EditorialDataRow(
+                  label: last.label,
+                  value: last.value,
+                  valueStyle: last.valueStyle,
+                  isLast: true,
+                );
+              }
+            }
+            return Column(children: rows);
+          }),
       ],
     );
   }
@@ -446,6 +474,8 @@ class _PreferencesEditPageState extends State<_PreferencesEditPage> {
 
   String? _preferredFuelId;
   double _weeklyRefuelCount = 1;
+  UsageProfile? _usageProfile;
+  PrimaryCity? _primaryCity;
   bool _saving = false;
 
   @override
@@ -455,9 +485,13 @@ class _PreferencesEditPageState extends State<_PreferencesEditPage> {
     final wk = meta?['weekly_km'];
     final wrc = meta?['weekly_refuel_count'];
     final pf = meta?['preferred_fuel_id'];
+    final up = meta?['usage_profile'];
+    final pc = meta?['primary_city'];
     if (wk is num) _weeklyKmCtrl.text = wk.toStringAsFixed(0);
     if (wrc is num) _weeklyRefuelCount = wrc.toDouble().clamp(1, 7);
     if (pf is String) _preferredFuelId = pf;
+    if (up is String) _usageProfile = UsageProfile.tryParse(up);
+    if (pc is String) _primaryCity = PrimaryCity.tryParse(pc);
   }
 
   @override
@@ -480,6 +514,8 @@ class _PreferencesEditPageState extends State<_PreferencesEditPage> {
             'preferred_fuel_id': _preferredFuelId,
             'weekly_km': weeklyKm,
             'weekly_refuel_count': _weeklyRefuelCount.round(),
+            'usage_profile': _usageProfile?.dbValue,
+            'primary_city': _primaryCity?.dbValue,
           },
         ),
       );
@@ -625,6 +661,30 @@ class _PreferencesEditPageState extends State<_PreferencesEditPage> {
                 ),
               ),
               const SizedBox(height: 32),
+              const EditorialSectionHeader(
+                index: '04',
+                label: 'PROFIL PEMAKAIAN',
+              ),
+              const SizedBox(height: 12),
+              _ProfilePicker<UsageProfile>(
+                value: _usageProfile,
+                options: UsageProfile.values,
+                labelOf: (v) => v.label,
+                onChange: (v) => setState(() => _usageProfile = v),
+              ),
+              const SizedBox(height: 28),
+              const EditorialSectionHeader(
+                index: '05',
+                label: 'KOTA UTAMA',
+              ),
+              const SizedBox(height: 12),
+              _ProfilePicker<PrimaryCity>(
+                value: _primaryCity,
+                options: PrimaryCity.values,
+                labelOf: (v) => v.label,
+                onChange: (v) => setState(() => _primaryCity = v),
+              ),
+              const SizedBox(height: 32),
               FilledButton(
                 onPressed: _saving ? null : _save,
                 child: _saving
@@ -642,6 +702,88 @@ class _PreferencesEditPageState extends State<_PreferencesEditPage> {
           );
         },
       ),
+    );
+  }
+}
+
+/// Vertically-stacked single-select picker. Shared with the onboarding
+/// SetupPreferencesPage but defined locally to avoid an import cycle.
+class _ProfilePicker<T> extends StatelessWidget {
+  const _ProfilePicker({
+    required this.value,
+    required this.options,
+    required this.labelOf,
+    required this.onChange,
+  });
+
+  final T? value;
+  final List<T> options;
+  final String Function(T) labelOf;
+  final ValueChanged<T?> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: options.map((opt) {
+        final selected = value == opt;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: GestureDetector(
+            onTap: () => onChange(selected ? null : opt),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color:
+                    selected ? AppEditorial.butter : AppEditorial.canvas,
+                border: Border.all(
+                  color: selected
+                      ? AppEditorial.ink
+                      : AppEditorial.hairline,
+                  width: selected ? 1.5 : 1,
+                ),
+                borderRadius:
+                    BorderRadius.circular(AppEditorial.rTiny),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppEditorial.ink,
+                        width: 1.2,
+                      ),
+                      color: selected
+                          ? AppEditorial.ink
+                          : AppEditorial.canvas,
+                    ),
+                    child: selected
+                        ? const Icon(Icons.check_rounded,
+                            size: 11, color: AppEditorial.canvas)
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      labelOf(opt),
+                      style: AppEditorial.mono(
+                        fontSize: 14,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

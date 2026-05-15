@@ -7,7 +7,12 @@ import '../../data/repository.dart';
 import '../home/home_shell.dart';
 
 class SetupPreferencesPage extends StatefulWidget {
-  const SetupPreferencesPage({super.key});
+  const SetupPreferencesPage({super.key, this.onCompleted});
+
+  /// When provided, called after successful save. The default flow uses
+  /// this from the auth gate to re-evaluate routing. If null, falls back
+  /// to pushing `HomeShell` directly (used by the linear onboarding flow).
+  final VoidCallback? onCompleted;
 
   @override
   State<SetupPreferencesPage> createState() => _SetupPreferencesPageState();
@@ -19,6 +24,8 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
 
   String? _preferredFuelId;
   double _weeklyRefuelCount = 1;
+  UsageProfile? _usageProfile;
+  PrimaryCity? _primaryCity;
   bool _saving = false;
 
   @override
@@ -35,6 +42,21 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
           ) ??
           0;
 
+      // Required: usage_profile + primary_city. Without these, the prediction
+      // service falls back to generic defaults — defeats the purpose.
+      if (_usageProfile == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pilih profil pemakaian.')),
+        );
+        return;
+      }
+      if (_primaryCity == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pilih kota utama.')),
+        );
+        return;
+      }
+
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(
           data: {
@@ -42,6 +64,8 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
             'preferred_fuel_id': _preferredFuelId,
             'weekly_km': weeklyKm,
             'weekly_refuel_count': _weeklyRefuelCount.round(),
+            'usage_profile': _usageProfile?.dbValue,
+            'primary_city': _primaryCity?.dbValue,
           },
         ),
       );
@@ -55,6 +79,11 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
   }
 
   void _goHome() {
+    if (widget.onCompleted != null) {
+      // Called from auth gate: just signal back, the gate handles routing.
+      widget.onCompleted!();
+      return;
+    }
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const HomeShell()),
       (route) => false,
@@ -63,9 +92,14 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppEditorial.canvas,
-      body: SafeArea(
+    // Prefs page is a hard requirement — don't let user back-button out
+    // of it. They must commit a usage_profile + primary_city before the
+    // dashboard renders.
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: AppEditorial.canvas,
+        body: SafeArea(
         child: FutureBuilder<List<FuelProduct>>(
           future: _repo.listFuelProducts(),
           builder: (context, snap) {
@@ -214,6 +248,32 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
                 ),
                 const SizedBox(height: 28),
 
+                const EditorialSectionHeader(
+                  index: '04',
+                  label: 'PROFIL PEMAKAIAN',
+                ),
+                const SizedBox(height: 12),
+                _PrefPicker<UsageProfile>(
+                  value: _usageProfile,
+                  options: UsageProfile.values,
+                  labelOf: (v) => v.label,
+                  onChange: (v) => setState(() => _usageProfile = v),
+                ),
+                const SizedBox(height: 28),
+
+                const EditorialSectionHeader(
+                  index: '05',
+                  label: 'KOTA UTAMA',
+                ),
+                const SizedBox(height: 12),
+                _PrefPicker<PrimaryCity>(
+                  value: _primaryCity,
+                  options: PrimaryCity.values,
+                  labelOf: (v) => v.label,
+                  onChange: (v) => setState(() => _primaryCity = v),
+                ),
+                const SizedBox(height: 28),
+
                 FilledButton(
                   onPressed: _saving ? null : _save,
                   child: _saving
@@ -227,17 +287,11 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
                         )
                       : const Text('SIMPAN & MASUK DASHBOARD →'),
                 ),
-                const SizedBox(height: 12),
-                Center(
-                  child: TextButton(
-                    onPressed: _saving ? null : _goHome,
-                    child: const Text('LEWATI · ISI NANTI'),
-                  ),
-                ),
               ],
             );
           },
         ),
+      ),
       ),
     );
   }
@@ -265,6 +319,89 @@ class _LoadingLine extends StatelessWidget {
               color: AppEditorial.inkSoft,
             )),
       ],
+    );
+  }
+}
+
+/// Vertically-stacked single-select picker for prefs page. Each option is a
+/// full-width row so labels (e.g. "Kerja lapangan") tidak terpotong.
+class _PrefPicker<T> extends StatelessWidget {
+  const _PrefPicker({
+    required this.value,
+    required this.options,
+    required this.labelOf,
+    required this.onChange,
+  });
+
+  final T? value;
+  final List<T> options;
+  final String Function(T) labelOf;
+  final ValueChanged<T?> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: options.map((opt) {
+        final selected = value == opt;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: GestureDetector(
+            onTap: () => onChange(selected ? null : opt),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppEditorial.butter
+                    : AppEditorial.canvas,
+                border: Border.all(
+                  color: selected
+                      ? AppEditorial.ink
+                      : AppEditorial.hairline,
+                  width: selected ? 1.5 : 1,
+                ),
+                borderRadius:
+                    BorderRadius.circular(AppEditorial.rTiny),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppEditorial.ink,
+                        width: 1.2,
+                      ),
+                      color: selected
+                          ? AppEditorial.ink
+                          : AppEditorial.canvas,
+                    ),
+                    child: selected
+                        ? const Icon(Icons.check_rounded,
+                            size: 11, color: AppEditorial.canvas)
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      labelOf(opt),
+                      style: AppEditorial.mono(
+                        fontSize: 14,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

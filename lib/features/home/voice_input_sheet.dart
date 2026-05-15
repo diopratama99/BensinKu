@@ -256,6 +256,17 @@ class _VoiceInputSheetState extends State<VoiceInputSheet> {
           style: AppEditorial.eyebrow(),
         ),
         const SizedBox(height: 10),
+        if (_listening)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: AspectRatio(
+              aspectRatio: 1080 / 400,
+              child: Image.asset(
+                'assets/illustrations/voice_wave.png',
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
         Expanded(
           child: SingleChildScrollView(
             child: Text(

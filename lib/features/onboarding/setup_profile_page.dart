@@ -73,7 +73,16 @@ class _SetupProfilePageState extends State<SetupProfilePage> {
                     )),
               ],
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 18),
+            // Hero illustration
+            AspectRatio(
+              aspectRatio: 1080 / 800,
+              child: Image.asset(
+                'assets/illustrations/onboarding_logbook.png',
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(height: 18),
             Text(
               'Halo, siapa namamu?',
               style: AppEditorial.mono(

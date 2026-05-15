@@ -68,15 +68,35 @@ class SupabaseRepository {
     required VehicleType type,
     required String name,
     num? tankCapacityLiters,
+    int? engineCc,
+    int? manufacturingYear,
+    BodyType? bodyType,
+    Transmission? transmission,
+    int? recommendedRon,
+    String? makeModel,
   }) async {
     return _run(() async {
       final capacity = tankCapacityLiters;
+      // body_type wajib null untuk motor (CHECK constraint).
+      final effectiveBodyType =
+          type == VehicleType.motor ? null : bodyType;
       final Map<String, dynamic> row = await _db
           .from('vehicles')
           .insert({
             'vehicle_type': type.dbValue,
             'name': name.trim().isEmpty ? type.label : name.trim(),
             if (capacity != null) 'tank_capacity_liters': capacity,
+            if (engineCc != null) 'engine_cc': engineCc,
+            if (manufacturingYear != null)
+              'manufacturing_year': manufacturingYear,
+            if (effectiveBodyType != null)
+              'body_type': effectiveBodyType.dbValue,
+            if (transmission != null)
+              'transmission': transmission.dbValue,
+            if (recommendedRon != null)
+              'recommended_ron': recommendedRon,
+            if (makeModel != null && makeModel.trim().isNotEmpty)
+              'make_model': makeModel.trim(),
           })
           .select()
           .single();
@@ -90,14 +110,30 @@ class SupabaseRepository {
     required String name,
     required VehicleType type,
     num? tankCapacityLiters,
+    int? engineCc,
+    int? manufacturingYear,
+    BodyType? bodyType,
+    Transmission? transmission,
+    int? recommendedRon,
+    String? makeModel,
   }) async {
     return _run(() async {
+      final effectiveBodyType =
+          type == VehicleType.motor ? null : bodyType;
       final Map<String, dynamic> row = await _db
           .from('vehicles')
           .update({
             'vehicle_type': type.dbValue,
             'name': name.trim().isEmpty ? type.label : name.trim(),
             'tank_capacity_liters': tankCapacityLiters,
+            'engine_cc': engineCc,
+            'manufacturing_year': manufacturingYear,
+            'body_type': effectiveBodyType?.dbValue,
+            'transmission': transmission?.dbValue,
+            'recommended_ron': recommendedRon,
+            'make_model': (makeModel?.trim().isEmpty ?? true)
+                ? null
+                : makeModel!.trim(),
           })
           .eq('id', id)
           .select()
@@ -176,8 +212,92 @@ class SupabaseRepository {
           )
           .single();
 
-      return Refuel.fromJson(row);
+      final created = Refuel.fromJson(row);
+
+      // Side effect: detect full-tank → full-tank cycles for prediction.
+      // Failures here are non-fatal — the refuel itself was already saved,
+      // efficiency sampling is best-effort.
+      if (created.isFullTank) {
+        try {
+          await _maybeRecordFullTankCycle(created);
+        } catch (_) {
+          // Swallow — efficiency sample is opportunistic.
+        }
+      }
+
+      return created;
     });
+  }
+
+  /// When a full-tank refuel is recorded, look back for the previous
+  /// full-tank refuel for the same vehicle. If one exists AND we have GPS
+  /// trip data covering the interval, insert a measured km/L sample.
+  ///
+  /// The unique index `fuel_efficiency_samples_pair_uidx` makes this
+  /// idempotent — re-running on an already-recorded pair is a no-op.
+  Future<void> _maybeRecordFullTankCycle(Refuel currentFull) async {
+    // 1. Find the previous full-tank refuel for this vehicle.
+    final prevRows = await _db
+        .from('refuels')
+        .select(
+            'id, vehicle_id, refuel_date, liters, is_full_tank, odometer_km')
+        .eq('vehicle_id', currentFull.vehicleId)
+        .eq('is_full_tank', true)
+        .lt(
+          'refuel_date',
+          currentFull.refuelDate.toUtc().toIso8601String(),
+        )
+        .order('refuel_date', ascending: false)
+        .limit(1);
+
+    final prevList = prevRows as List<dynamic>;
+    if (prevList.isEmpty) return; // first full tank, no cycle yet
+
+    final prevFull =
+        Refuel.fromJson(prevList.first as Map<String, dynamic>);
+
+    // 2. Determine km traveled between the two full-tanks.
+    double? kmTraveled;
+
+    // 2a. Prefer odometer delta if both refuels recorded an odometer.
+    final prevOdo = prevFull.odometerKm;
+    final curOdo = currentFull.odometerKm;
+    if (prevOdo != null && curOdo != null && curOdo > prevOdo) {
+      kmTraveled = (curOdo - prevOdo).toDouble();
+    }
+
+    // 2b. Else fall back to summing trip distance in the interval.
+    if (kmTraveled == null) {
+      final tripRows = await _db
+          .from('trips')
+          .select('distance_km')
+          .eq('vehicle_id', currentFull.vehicleId)
+          .gte('started_at',
+              prevFull.refuelDate.toUtc().toIso8601String())
+          .lt('started_at',
+              currentFull.refuelDate.toUtc().toIso8601String())
+          .not('ended_at', 'is', null);
+      final trips = tripRows as List<dynamic>;
+      final totalKm = trips.fold<double>(
+        0,
+        (s, r) => s + ((r['distance_km'] as num?)?.toDouble() ?? 0),
+      );
+      if (totalKm > 0) kmTraveled = totalKm;
+    }
+
+    // 3. No measurable km → skip silently. We don't want to record
+    //    a sample we can't trust.
+    if (kmTraveled == null || kmTraveled <= 0) return;
+
+    // 4. Insert sample. Liters filled = the *current* full-tank fill,
+    //    which is what was needed to refill from "empty-ish" back to full.
+    await recordEfficiencySample(
+      vehicleId: currentFull.vehicleId,
+      fromRefuelId: prevFull.id,
+      toRefuelId: currentFull.id,
+      kmTraveled: kmTraveled,
+      litersFilled: currentFull.liters.toDouble(),
+    );
   }
 
   Future<List<Refuel>> listRefuels({
@@ -300,6 +420,66 @@ class SupabaseRepository {
           .order('recorded_at');
       return rows
           .map((e) => TripWaypoint.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
+  // ─── Efficiency sample methods (Predictions v2) ─────────────────────────
+
+  /// Insert a measured km/L sample. Idempotent jika `(vehicle_id,
+  /// from_refuel_id, to_refuel_id)` sudah ada (unique index akan throw 23505,
+  /// di-swallow disini supaya auto-retry aman).
+  Future<EfficiencySample?> recordEfficiencySample({
+    required String vehicleId,
+    required double kmTraveled,
+    required double litersFilled,
+    String? fromRefuelId,
+    String? toRefuelId,
+    Map<String, dynamic>? context,
+  }) async {
+    return _run(() async {
+      final userId = _client.auth.currentUser?.id;
+      if (userId == null) throw StateError('User not logged in');
+
+      try {
+        final Map<String, dynamic> row = await _db
+            .from('fuel_efficiency_samples')
+            .insert({
+              'user_id': userId,
+              'vehicle_id': vehicleId,
+              'from_refuel_id': fromRefuelId,
+              'to_refuel_id': toRefuelId,
+              'km_traveled': kmTraveled,
+              'liters_filled': litersFilled,
+              if (context != null) 'context': context,
+            })
+            .select()
+            .single();
+        return EfficiencySample.fromJson(row);
+      } on PostgrestException catch (e) {
+        // 23505 = unique_violation. Pasangan refuel sudah pernah direkam,
+        // ini operasi idempotent jadi bukan error.
+        if (e.code == '23505') return null;
+        rethrow;
+      }
+    });
+  }
+
+  /// N pengukuran efisiensi terbaru untuk satu kendaraan.
+  Future<List<EfficiencySample>> recentEfficiencySamples({
+    required String vehicleId,
+    int limit = 10,
+  }) async {
+    return _run(() async {
+      final List<dynamic> rows = await _db
+          .from('fuel_efficiency_samples')
+          .select()
+          .eq('vehicle_id', vehicleId)
+          .order('measured_at', ascending: false)
+          .range(0, limit - 1);
+      return rows
+          .map((e) =>
+              EfficiencySample.fromJson(e as Map<String, dynamic>))
           .toList();
     });
   }

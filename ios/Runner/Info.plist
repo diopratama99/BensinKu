@@ -55,5 +55,14 @@
 		<string>BensinKu butuh akses kamera untuk memindai struk SPBU.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>BensinKu butuh akses galeri untuk memilih foto struk SPBU.</string>
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>BensinKu butuh akses lokasi untuk merekam rute perjalanan dan menghitung jarak tempuh.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>BensinKu butuh akses lokasi di latar belakang supaya rute tetap tercatat saat layar mati.</string>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>location</string>
+			<string>fetch</string>
+		</array>
 	</dict>
 </plist>

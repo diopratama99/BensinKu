@@ -36,7 +36,16 @@ class WelcomePage extends StatelessWidget {
                     style: AppEditorial.eyebrow()),
               ],
             ),
-            const SizedBox(height: 60),
+            const SizedBox(height: 32),
+            // Hero illustration
+            AspectRatio(
+              aspectRatio: 1080 / 800,
+              child: Image.asset(
+                'assets/illustrations/onboarding_pump.png',
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(height: 20),
             Text(
               'Pantau bensinmu.',
               style: AppEditorial.mono(

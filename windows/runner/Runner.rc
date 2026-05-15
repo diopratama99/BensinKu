@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.bensinku" "\0"
+            VALUE "CompanyName", "com.temanlabs" "\0"
             VALUE "FileDescription", "bensinku" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "bensinku" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.bensinku. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.temanlabs. All rights reserved." "\0"
             VALUE "OriginalFilename", "bensinku.exe" "\0"
             VALUE "ProductName", "bensinku" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

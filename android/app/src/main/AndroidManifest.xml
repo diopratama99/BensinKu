@@ -1,7 +1,25 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Background-location: required so the OS keeps delivering GPS
+         updates after screen-off / app backgrounded during a trip. The
+         user is asked separately ("Allow all the time") before this kicks
+         in. Without this, our trip ticker stalls until the user reopens
+         the app. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- Foreground service for the trip-tracking notification (started by
+         geolocator's foregroundNotificationConfig). FOREGROUND_SERVICE
+         alone is enough up to API 33; FOREGROUND_SERVICE_LOCATION is the
+         dedicated subtype needed on API 34+ (Android 14). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Wake-lock so the CPU stays awake long enough to deliver position
+         events while the screen is off. Geolocator opts in via
+         enableWakeLock on the foreground config but the permission must
+         be declared here. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -32,6 +50,15 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Geolocator's foreground service that keeps GPS streaming
+             while screen is off / app backgrounded. Plugin registers the
+             service class itself; we only override foregroundServiceType
+             since Android 14+ requires it to be declared here too. -->
+        <service
+            android:name="com.baseflow.geolocator.GeolocatorLocationService"
+            android:foregroundServiceType="location"
+            android:exported="false"
+            tools:node="merge" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

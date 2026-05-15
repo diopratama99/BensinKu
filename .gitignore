@@ -49,3 +49,6 @@ app.*.map.json
 
 /supabase.json
 /command_line.md
+
+/PREDICTION_TODO.md
+/ASSETS_PROMPTS.md

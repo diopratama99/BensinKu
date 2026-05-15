@@ -6,6 +6,30 @@ import 'package:geolocator/geolocator.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 
+/// Outcome of a location-permission request.
+///
+/// We need finer granularity than just "granted/denied" because
+/// `whileInUseOnly` is silently lossy — tracking will look like it's
+/// working in the foreground but stop accumulating waypoints once the
+/// screen turns off. The UI should warn the user when this happens.
+enum LocationPermissionStatus {
+  /// Permission denied this round, but the user can be asked again next
+  /// time (system has not flagged "don't ask again").
+  denied,
+
+  /// User picked "Don't ask again" / iOS "Never". Only the system
+  /// settings page can re-grant from here.
+  permanentlyDenied,
+
+  /// Got "While using the app" but not "Always". Tracking works in
+  /// foreground only; will pause when screen turns off.
+  whileInUseOnly,
+
+  /// Got "Always" / "Allow all the time". Tracking is robust to
+  /// screen-off / backgrounding.
+  alwaysGranted,
+}
+
 /// Handles GPS-based trip tracking.
 ///
 /// Usage:
@@ -37,14 +61,70 @@ class TripService extends ChangeNotifier {
   final List<TripWaypoint> _pendingWaypoints = [];
   Timer? _flushTimer;
 
-  /// Requests location permission. Returns true if granted.
-  static Future<bool> requestPermission() async {
+  /// Result of a permission request. Tells the caller whether tracking
+  /// will survive screen-off / app-backgrounded.
+  ///
+  /// - [granted]: location permission obtained at all? If false, tracking
+  ///   cannot start.
+  /// - [background]: was "Allow all the time" (Always) granted? If false,
+  ///   tracking still works while the app is foregrounded but Android will
+  ///   pause GPS updates when the screen turns off, leaving the trip log
+  ///   with gaps.
+  /// - [permanentlyDenied]: the user picked "Don't ask again" — only the
+  ///   app-settings page can re-grant.
+  static const _permWhileInUse = LocationPermission.whileInUse;
+  static const _permAlways = LocationPermission.always;
+
+  /// Asks for location permission, escalating to "Always" so background
+  /// tracking works.
+  ///
+  /// Two-step flow on Android 11+:
+  ///   1. Request whileInUse — system shows the basic dialog.
+  ///   2. If granted, request always — system kicks the user into
+  ///      Settings to upgrade ("Allow all the time").
+  ///
+  /// On iOS we ask once; the system handles the two-step prompt itself.
+  static Future<LocationPermissionStatus> requestPermission() async {
     LocationPermission perm = await Geolocator.checkPermission();
+
+    // Step 1: get at least whileInUse.
     if (perm == LocationPermission.denied) {
       perm = await Geolocator.requestPermission();
     }
-    return perm == LocationPermission.always ||
-        perm == LocationPermission.whileInUse;
+    if (perm == LocationPermission.deniedForever) {
+      return LocationPermissionStatus.permanentlyDenied;
+    }
+    if (perm == LocationPermission.denied) {
+      return LocationPermissionStatus.denied;
+    }
+
+    // Step 2: try to escalate to "Always" so tracking survives screen-off.
+    if (perm == _permWhileInUse) {
+      try {
+        final upgraded = await Geolocator.requestPermission();
+        if (upgraded == _permAlways) {
+          return LocationPermissionStatus.alwaysGranted;
+        }
+      } catch (_) {
+        // requestPermission can throw on subsequent calls within a short
+        // window. Treat as no-upgrade rather than a hard error.
+      }
+      return LocationPermissionStatus.whileInUseOnly;
+    }
+
+    if (perm == _permAlways) {
+      return LocationPermissionStatus.alwaysGranted;
+    }
+    return LocationPermissionStatus.denied;
+  }
+
+  /// Opens the system app-settings screen so the user can grant
+  /// "Allow all the time" manually. Used when [requestPermission] returns
+  /// [LocationPermissionStatus.permanentlyDenied] or
+  /// [LocationPermissionStatus.whileInUseOnly] and the user wants to fix
+  /// it.
+  static Future<bool> openLocationSettings() {
+    return Geolocator.openAppSettings();
   }
 
   /// Checks if location services are enabled on device.
@@ -62,10 +142,7 @@ class TripService extends ChangeNotifier {
     _activeTrip = await _repo.createTrip(vehicleId: _vehicleId);
     notifyListeners();
 
-    const settings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 15, // only emit when moved ≥15m
-    );
+    final settings = _trackingLocationSettings();
 
     _positionSub = Geolocator.getPositionStream(locationSettings: settings)
         .listen((pos) => _onPosition(pos));
@@ -73,6 +150,51 @@ class TripService extends ChangeNotifier {
     // Flush waypoints to Supabase every 30s
     _flushTimer =
         Timer.periodic(const Duration(seconds: 30), (_) => _flushWaypoints());
+  }
+
+  /// Platform-aware location settings for an active trip.
+  ///
+  /// On Android we attach a foreground notification config so the OS keeps
+  /// our position stream alive when the screen turns off. Without this,
+  /// background scheduling kicks in and updates stop arriving until the user
+  /// re-opens the app — which is the bug where "tracking active but no
+  /// dots being added".
+  ///
+  /// On iOS we set `allowBackgroundLocationUpdates` + `pauseLocationUpdates`
+  /// off. iOS also needs the `UIBackgroundModes: location` Info.plist key
+  /// and `NSLocationAlwaysAndWhenInUseUsageDescription` for this to work
+  /// past app backgrounding (configured separately).
+  LocationSettings _trackingLocationSettings() {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 15,
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: 'BensinKu sedang mencatat rute',
+          notificationText:
+              'Tracking GPS berjalan. Tap untuk kembali ke aplikasi.',
+          enableWakeLock: true,
+          setOngoing: true,
+        ),
+      );
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      return AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 15,
+        // Required for the stream to keep delivering updates after the
+        // user backgrounds the app or locks the screen.
+        allowBackgroundLocationUpdates: true,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+        activityType: ActivityType.automotiveNavigation,
+      );
+    }
+    return const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 15,
+    );
   }
 
   void _onPosition(Position pos) {

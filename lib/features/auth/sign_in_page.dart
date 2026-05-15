@@ -98,7 +98,16 @@ class _SignInPageState extends State<SignInPage> {
                           style: AppEditorial.eyebrow()),
                     ],
                   ),
-                  const SizedBox(height: 60),
+                  const SizedBox(height: 28),
+                  // Hero illustration
+                  AspectRatio(
+                    aspectRatio: 1080 / 720,
+                    child: Image.asset(
+                      'assets/illustrations/auth_pump.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
                   Text(
                     'Masuk ke akun.',
                     style: AppEditorial.mono(

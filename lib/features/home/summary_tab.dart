@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
+import '../../services/prediction_service.dart';
 import '../../widgets/vehicle_cover.dart';
 
 /// Beranda — fuel logbook dashboard.
@@ -105,10 +106,24 @@ class _SummaryTabState extends State<SummaryTab> {
               final lastRefuel =
                   refuels.isNotEmpty ? refuels.first : null;
               final recentRefuels = refuels.take(4).toList();
+              final selectedVehicle = vehicles.firstWhere(
+                (v) => v.id == _vehicleId,
+                orElse: () => vehicles.first,
+              );
 
               return ListView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
                 children: [
+                  // Greeting + vehicle selector
+                  const _GreetingBlock(),
+                  const SizedBox(height: 14),
+                  _VehicleSelector(
+                    vehicle: selectedVehicle,
+                    totalCount: vehicles.length,
+                    onTap: () => _pickVehicle(vehicles),
+                  ),
+                  const SizedBox(height: 24),
+
                   // §01 — Laporan bulan ini
                   EditorialSectionHeader(
                     index: '01',
@@ -145,33 +160,12 @@ class _SummaryTabState extends State<SummaryTab> {
                     label: 'PREDIKSI BENSIN',
                   ),
                   const SizedBox(height: 14),
-                  _FuelPredictionBlock(vehicleId: _vehicleId!),
+                  _FuelPredictionBlock(vehicle: selectedVehicle),
                   const SizedBox(height: 28),
 
-                  // §04 — Garasi
+                  // §04 — Riwayat
                   EditorialSectionHeader(
                     index: '04',
-                    label: 'GARASI',
-                    trailing: Text(
-                      '${vehicles.length} UNIT',
-                      style: AppEditorial.eyebrow(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  ...vehicles.map((v) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _VehicleRow(
-                          vehicle: v,
-                          isSelected: v.id == _vehicleId,
-                          onTap: () =>
-                              setState(() => _vehicleId = v.id),
-                        ),
-                      )),
-                  const SizedBox(height: 18),
-
-                  // §05 — Riwayat
-                  EditorialSectionHeader(
-                    index: '05',
                     label: 'RIWAYAT',
                     trailing: GestureDetector(
                       onTap: widget.onGoToHistory,
@@ -216,6 +210,242 @@ class _SummaryTabState extends State<SummaryTab> {
       ),
     );
   }
+
+  Future<void> _pickVehicle(List<Vehicle> vehicles) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppEditorial.canvas,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 3,
+                  color: AppEditorial.hairline,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text('GARASI', style: AppEditorial.eyebrow()),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: CustomPaint(
+                      painter: _DottedLine(),
+                      child: const SizedBox(height: 1),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('${vehicles.length} UNIT',
+                      style: AppEditorial.eyebrow()),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ...vehicles.map((v) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _VehicleRow(
+                      vehicle: v,
+                      isSelected: v.id == _vehicleId,
+                      onTap: () => Navigator.of(ctx).pop(v.id),
+                    ),
+                  )),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked != null && picked != _vehicleId) {
+      setState(() => _vehicleId = picked);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Greeting + vehicle selector (top of dashboard)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _GreetingBlock extends StatelessWidget {
+  const _GreetingBlock();
+
+  String _greetingPrefix(int hour) {
+    if (hour >= 4 && hour < 11) return 'Selamat Pagi';
+    if (hour >= 11 && hour < 15) return 'Selamat Siang';
+    if (hour >= 15 && hour < 18) return 'Selamat Sore';
+    return 'Selamat Malam';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final user = Supabase.instance.client.auth.currentUser;
+    final raw = user?.userMetadata?['name'];
+    var name = raw is String ? raw.trim() : '';
+    if (name.isEmpty) {
+      final email = user?.email ?? '';
+      name = email.contains('@') ? email.split('@').first : 'Pengendara';
+    }
+    final firstName = name.split(RegExp(r'\s+')).first;
+    final greeting = _greetingPrefix(now.hour);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Vertical butter rule
+        Container(
+          width: 3,
+          height: 44,
+          color: AppEditorial.butter,
+          margin: const EdgeInsets.only(right: 12),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                greeting.toUpperCase(),
+                style: AppEditorial.eyebrow(
+                  color: AppEditorial.butterDeep,
+                  fontSize: 10,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                firstName,
+                style: AppEditorial.mono(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                  height: 1.05,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VehicleSelector extends StatelessWidget {
+  const _VehicleSelector({
+    required this.vehicle,
+    required this.totalCount,
+    required this.onTap,
+  });
+
+  final Vehicle vehicle;
+  final int totalCount;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+        decoration: BoxDecoration(
+          color: AppEditorial.canvas,
+          border:
+              Border.all(color: AppEditorial.hairline, width: 1),
+          borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+        ),
+        child: Row(
+          children: [
+            // Compact icon
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: AppEditorial.butterSoft,
+                borderRadius:
+                    BorderRadius.circular(AppEditorial.rTiny),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                vehicle.type.label.toLowerCase().contains('motor')
+                    ? Icons.two_wheeler_rounded
+                    : Icons.directions_car_rounded,
+                size: 16,
+                color: AppEditorial.butterDeep,
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Eyebrow + name on a single tight line
+            Expanded(
+              child: Row(
+                children: [
+                  Text(
+                    vehicle.type.label.toUpperCase(),
+                    style: AppEditorial.eyebrow(
+                      fontSize: 9,
+                      color: AppEditorial.butterDeep,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      vehicle.name,
+                      style: AppEditorial.mono(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '$totalCount UNIT',
+              style: AppEditorial.eyebrow(
+                fontSize: 9,
+                color: AppEditorial.inkMuted,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.unfold_more_rounded,
+              size: 16,
+              color: AppEditorial.inkMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DottedLine extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppEditorial.hairline
+      ..strokeWidth = 1;
+    const dotSize = 1.5;
+    const gap = 4.0;
+    double x = 0;
+    while (x < size.width) {
+      canvas.drawCircle(Offset(x, size.height / 2), dotSize / 2, paint);
+      x += dotSize + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -500,20 +730,25 @@ class _LastRefuelLine extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FuelPredictionBlock extends StatelessWidget {
-  const _FuelPredictionBlock({required this.vehicleId});
-  final String vehicleId;
+  const _FuelPredictionBlock({required this.vehicle});
+  final Vehicle vehicle;
 
   @override
   Widget build(BuildContext context) {
     final repo = SupabaseRepository.ofDefaultClient();
 
-    return FutureBuilder<(List<Refuel>, List<Trip>)>(
+    return FutureBuilder<(List<Refuel>, List<Trip>, List<EfficiencySample>)>(
       future: () async {
         final results = await Future.wait([
-          repo.listRefuels(vehicleId: vehicleId),
-          repo.listTrips(vehicleId: vehicleId),
+          repo.listRefuels(vehicleId: vehicle.id),
+          repo.listTrips(vehicleId: vehicle.id),
+          repo.recentEfficiencySamples(vehicleId: vehicle.id, limit: 20),
         ]);
-        return (results[0] as List<Refuel>, results[1] as List<Trip>);
+        return (
+          results[0] as List<Refuel>,
+          results[1] as List<Trip>,
+          results[2] as List<EfficiencySample>,
+        );
       }(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
@@ -525,82 +760,78 @@ class _FuelPredictionBlock extends StatelessWidget {
 
         final refuels = snap.data!.$1;
         final trips = snap.data!.$2;
-        if (refuels.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              'belum cukup data untuk memprediksi.',
-              style: AppEditorial.sans(
-                fontSize: 13,
-                color: AppEditorial.inkSoft,
-              ),
-            ),
-          );
-        }
+        final samples = snap.data!.$3;
 
+        // User preferences (used by both prior and daily-km estimate).
         final meta =
             Supabase.instance.client.auth.currentUser?.userMetadata;
-
-        final totalTripKm =
-            trips.fold<double>(0, (s, t) => s + (t.distanceKm ?? 0));
-        final totalLiters =
-            refuels.fold<double>(0, (s, r) => s + r.liters);
-        final kmPerLiter = (totalTripKm > 0 && totalLiters > 0)
-            ? totalTripKm / totalLiters
+        final usageProfile =
+            UsageProfile.tryParse(meta?['usage_profile'] as String?);
+        final primaryCity =
+            PrimaryCity.tryParse(meta?['primary_city'] as String?);
+        final weeklyKmPref = meta?['weekly_km'] is num
+            ? meta!['weekly_km'] as num
             : null;
 
-        final lastRefuel = refuels.first;
-        final kmSinceLast = trips
-            .where((t) => t.startedAt.isAfter(lastRefuel.refuelDate))
-            .fold<double>(0, (s, t) => s + (t.distanceKm ?? 0));
+        // Posterior km/L (Bayesian-blended prior + measured samples).
+        final estimate = PredictionService.posteriorKmPerLiter(
+          vehicle: vehicle,
+          samples: samples,
+          primaryCity: primaryCity,
+          usageProfile: usageProfile,
+        );
+        final kmPerLiter = estimate.kmPerLiter;
 
-        double remaining = 0;
-        double remainingPct = 0;
-        if (kmPerLiter != null) {
+        // Daily-km estimate, with provenance label for the user.
+        final dailyKm = PredictionService.dailyKmEstimate(
+          recentTrips: trips,
+          weeklyKmPref: weeklyKmPref,
+          usageProfile: usageProfile,
+        );
+        final avgDailyKm = dailyKm.kmPerDay;
+
+        // ── Tank-level estimation ───────────────────────────────────
+        // If we have refuels, base "remaining" on the last refuel +
+        // distance traveled since. If we have NO refuels at all yet,
+        // we still want to render something usable using preferences
+        // alone (the whole point of cold-start prior).
+        final lastRefuel = refuels.isNotEmpty ? refuels.first : null;
+
+        double remaining;
+        double remainingPct;
+        if (lastRefuel != null) {
+          final kmSinceLast = trips
+              .where((t) => t.startedAt.isAfter(lastRefuel.refuelDate))
+              .fold<double>(0, (s, t) => s + (t.distanceKm ?? 0));
           final consumed = kmSinceLast / kmPerLiter;
           remaining = (lastRefuel.liters.toDouble() - consumed)
               .clamp(0.0, lastRefuel.liters.toDouble());
-          remainingPct =
-              (remaining / lastRefuel.liters.toDouble()).clamp(0.0, 1.0);
+          remainingPct = (remaining /
+                  (lastRefuel.liters == 0
+                      ? 1.0
+                      : lastRefuel.liters.toDouble()))
+              .clamp(0.0, 1.0);
         } else {
-          remainingPct = lastRefuel.isFullTank ? 1.0 : 0.5;
-          remaining = lastRefuel.liters.toDouble() * remainingPct;
+          // No data yet — assume tank is roughly full. UI will show
+          // PRIOR badge to indicate uncertainty.
+          remaining = (vehicle.tankCapacityLiters?.toDouble() ?? 0) * 0.9;
+          remainingPct = 0.9;
         }
 
-        double? avgDailyKm;
-        String? dailyKmSource;
-        if (trips.isNotEmpty) {
-          final d30ago = DateTime.now().subtract(const Duration(days: 30));
-          final km30 = trips
-              .where((t) => t.startedAt.isAfter(d30ago))
-              .fold<double>(0, (s, t) => s + (t.distanceKm ?? 0));
-          if (km30 > 0) {
-            avgDailyKm = km30 / 30;
-            dailyKmSource = '30 hari';
-          }
-        }
-        final prefWeeklyKm = meta?['weekly_km'];
-        if (prefWeeklyKm is num &&
-            prefWeeklyKm > 0 &&
-            avgDailyKm == null) {
-          avgDailyKm = prefWeeklyKm / 7;
-          dailyKmSource = 'preferensi';
-        }
-
+        // ── Days left until refill ──────────────────────────────────
         double? daysLeft;
         DateTime? predictedDate;
-        if (kmPerLiter != null && avgDailyKm != null && avgDailyKm > 0) {
+        if (avgDailyKm > 0 && remaining > 0) {
           final dailyCons = avgDailyKm / kmPerLiter;
-          if (dailyCons > 0 && remaining > 0) {
+          if (dailyCons > 0) {
             daysLeft = remaining / dailyCons;
             predictedDate = DateTime.now()
                 .add(Duration(hours: (daysLeft * 24).round()));
           }
         }
 
-        final hasData = kmPerLiter != null && avgDailyKm != null;
-        final isWarning = hasData &&
-            (remainingPct < 0.15 || (daysLeft != null && daysLeft < 2));
+        final isWarning =
+            remainingPct < 0.15 || (daysLeft != null && daysLeft < 2);
         final accent =
             isWarning ? AppEditorial.rust : AppEditorial.butterDeep;
 
@@ -669,6 +900,13 @@ class _FuelPredictionBlock extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
+              // Confidence badge — tells the user how grounded the
+              // prediction is in their actual data vs the prior.
+              _ConfidenceBadge(
+                source: estimate.source,
+                sampleCount: estimate.sampleCount,
+              ),
+              const SizedBox(height: 10),
               // Progress bar
               ClipRRect(
                 borderRadius:
@@ -683,9 +921,7 @@ class _FuelPredictionBlock extends StatelessWidget {
               const SizedBox(height: 12),
               EditorialDataRow(
                 label: 'Efisiensi',
-                value: kmPerLiter != null
-                    ? '${kmPerLiter.toStringAsFixed(1)} km/L'
-                    : '—',
+                value: '${kmPerLiter.toStringAsFixed(1)} km/L',
               ),
               EditorialDataRow(
                 label: 'Sisa hari',
@@ -709,20 +945,73 @@ class _FuelPredictionBlock extends StatelessWidget {
                     : '—',
                 isLast: true,
               ),
-              if (dailyKmSource != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'sumber data: $dailyKmSource',
-                  style: AppEditorial.sans(
-                    fontSize: 10.5,
-                    color: AppEditorial.inkMuted,
-                  ),
+              const SizedBox(height: 6),
+              Text(
+                'sumber jarak: ${dailyKm.source}',
+                style: AppEditorial.sans(
+                  fontSize: 10.5,
+                  color: AppEditorial.inkMuted,
                 ),
-              ],
+              ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+/// Small badge: "PRIOR · setup awal" / "MIXED · 3 ukuran" / "DATA-DRIVEN · 12 ukuran".
+class _ConfidenceBadge extends StatelessWidget {
+  const _ConfidenceBadge({
+    required this.source,
+    required this.sampleCount,
+  });
+
+  final String source;
+  final int sampleCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (source) {
+      'DATA-DRIVEN' => AppEditorial.sage,
+      'MIXED' => AppEditorial.butterDeep,
+      _ => AppEditorial.inkMuted,
+    };
+    final detail = sampleCount == 0
+        ? 'belum ada ukuran'
+        : '$sampleCount ukuran';
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            border: Border.all(color: color, width: 1),
+            borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+          ),
+          child: Text(
+            source,
+            style: AppEditorial.mono(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: 0.6,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          detail,
+          style: AppEditorial.mono(
+            fontSize: 10,
+            color: AppEditorial.inkMuted,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1010,7 +1299,16 @@ class _CenteredEmpty extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(20),
       children: [
-        const SizedBox(height: 60),
+        const SizedBox(height: 40),
+        // Empty-state illustration
+        AspectRatio(
+          aspectRatio: 800 / 600,
+          child: Image.asset(
+            'assets/illustrations/empty_garasi.png',
+            fit: BoxFit.contain,
+          ),
+        ),
+        const SizedBox(height: 18),
         const EditorialEyebrow('PEMBUKAAN'),
         const SizedBox(height: 10),
         Text(
