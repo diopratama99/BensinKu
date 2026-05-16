@@ -343,4 +343,14 @@ dart run flutter_native_splash:create
 
 ## License
 
-Proyek ini dibuat untuk keperluan pribadi & tugas akademik.
+Copyright © 2025 Teman Labs. All rights reserved.
+
+## Author
+
+**Dio Pratama - Teman Labs**
+
+- GitHub: [@diopratama99](https://github.com/diopratama99)
+
+## Contributing
+
+Contributions, issues and feature requests are welcome!
