@@ -109,23 +109,48 @@ Fondasi sekarang sudah membungkus sinyal terkuat (prior + full-tank ground truth
 
 ## Screenshots
 
+### Auth & Onboarding
+
 <p align="center">
-  <img src="Screenshot/Screenshot_20260414-142821.png" width="200"/>
-  <img src="Screenshot/Screenshot_20260414-142826.png" width="200"/>
-  <img src="Screenshot/Screenshot_20260414-142830.png" width="200"/>
-  <img src="Screenshot/Screenshot_20260414-142834.png" width="200"/>
+  <img src="Screenshot/auth_screen_1.jpeg" width="200"/>
+  <img src="Screenshot/auth_screen_2.jpeg" width="200"/>
+  <img src="Screenshot/auth_screen_3.jpeg" width="200"/>
 </p>
 
 <p align="center">
-  <img src="Screenshot/Screenshot_20260414-142843.png" width="200"/>
-  <img src="Screenshot/Screenshot_20260414-142858.png" width="200"/>
-  <img src="Screenshot/Screenshot_20260414-142906.png" width="200"/>
-  <img src="Screenshot/Screenshot_20260414-142913.png" width="200"/>
+  <img src="Screenshot/add_vehicle_1.jpeg" width="200"/>
+  <img src="Screenshot/add_vehicle_2.jpeg" width="200"/>
+  <img src="Screenshot/vehicle_detail.jpeg" width="200"/>
+</p>
+
+### Dashboard & Analytics
+
+<p align="center">
+  <img src="Screenshot/dashboard_screen_1.jpeg" width="200"/>
+  <img src="Screenshot/dashboard_screen_2.jpeg" width="200"/>
+  <img src="Screenshot/analytics_screen_1.jpeg" width="200"/>
+  <img src="Screenshot/analytics_screen_2.jpeg" width="200"/>
+</p>
+
+### Refuel Input — Manual, OCR Receipt & Voice
+
+<p align="center">
+  <img src="Screenshot/manual_input.jpeg" width="200"/>
+  <img src="Screenshot/ocr_select.jpeg" width="200"/>
+  <img src="Screenshot/ocr_scanning.jpeg" width="200"/>
+  <img src="Screenshot/voice_input.jpeg" width="200"/>
 </p>
 
 <p align="center">
-  <img src="Screenshot/Screenshot_20260414-142923.png" width="200"/>
-  <img src="Screenshot/Screenshot_20260414-143316.png" width="200"/>
+  <img src="Screenshot/ai_output.jpeg" width="200"/>
+</p>
+
+### History, Routes & Profile
+
+<p align="center">
+  <img src="Screenshot/history_screen.jpeg" width="200"/>
+  <img src="Screenshot/rute_screen.jpeg" width="200"/>
+  <img src="Screenshot/profile_screen.jpeg" width="200"/>
 </p>
 
 ---
