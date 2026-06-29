@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
@@ -9,8 +10,11 @@ import 'package:latlong2/latlong.dart';
 import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
+import '../../services/notification_service.dart';
 import '../../services/trip_service.dart';
 import '../../services/widget_launch_intent.dart';
+import 'manual_trip_sheet.dart';
+import 'trip_detail_page.dart';
 
 /// Rute — GPS trip recorder with telemetry overlay.
 /// Map is monochrome; overlays are mono LCD-style readouts.
@@ -47,6 +51,11 @@ class _TripMapScreenState extends State<TripMapScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _init();
+    // Cek pending tap notif auto-stop di frame berikutnya. Harus
+    // setelah build pertama supaya Navigator siap di-push ke.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeOpenTripDetailFromNotification();
+    });
   }
 
   @override
@@ -57,9 +66,47 @@ class _TripMapScreenState extends State<TripMapScreen>
     // state stays in sync with reality.
     if (state == AppLifecycleState.resumed) {
       _refreshPermissionStatus();
+      // If a trip is active, re-evaluate idle right away. While the app
+      // was backgrounded with the screen off and the device stationary,
+      // the periodic idle timer may have been suspended by the OS — so a
+      // trip that crossed the 30-min idle threshold while we were asleep
+      // gets auto-stopped now (ended_at is backdated, idle tail excluded).
+      _service?.checkIdleNow();
+      // Prioritas: kalau user tap notif auto-stop, buka detail trip-nya.
+      // Harus dicek SEBELUM `_maybeAutoStartFromWidget()` supaya user
+      // tidak salah malah memulai trip baru — itu yang dikeluhkan
+      // sebelum fix ini.
+      _maybeOpenTripDetailFromNotification();
       // App may have been brought to foreground via the widget's
       // "MULAI PERJALANAN" tap. Re-poll to honor that even when warm.
       _maybeAutoStartFromWidget();
+    }
+  }
+
+  /// Kalau user tap notif "Trip dihentikan otomatis", payload-nya
+  /// berisi trip-id. Kita fetch trip-nya, dan navigate ke detail page.
+  /// Operasi ini idempotent — pending id di-consume sekali pakai oleh
+  /// `NotificationService.consumePendingTripDetail()`.
+  Future<void> _maybeOpenTripDetailFromNotification() async {
+    final tripId = NotificationService.consumePendingTripDetail();
+    if (tripId == null || tripId.isEmpty || !mounted) return;
+
+    // Drain juga flag widget "MULAI PERJALANAN" di siklus ini supaya
+    // tidak nyangkut: tap notif ≠ tap widget. Kalau dibiarkan, jalur
+    // `_maybeAutoStartFromWidget` berikutnya bisa ngira ini intent
+    // widget dan nge-trigger trip baru — tepat bug yang kita fix.
+    unawaited(WidgetLaunchIntent.consumePending());
+
+    try {
+      final trip = await _repo.getTrip(tripId);
+      if (!mounted || trip == null) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TripDetailPage(trip: trip),
+        ),
+      );
+    } catch (_) {
+      _showSnack('Tidak dapat memuat detail perjalanan.');
     }
   }
 
@@ -193,6 +240,29 @@ class _TripMapScreenState extends State<TripMapScreen>
     _idlePositionSub = null;
   }
 
+  /// Opens the manual trip entry sheet — for when the user forgot to record
+  /// live tracking. On save, refreshes so the new trip is reflected.
+  Future<void> _openManualEntry() async {
+    if (_vehicles.isEmpty) {
+      _showSnack('Tambah kendaraan dulu di profil.');
+      return;
+    }
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: AppEditorial.ink.withValues(alpha: 0.55),
+      builder: (_) => ManualTripSheet(
+        vehicles: _vehicles,
+        initialVehicleId: _selectedVehicle?.id,
+      ),
+    );
+    if (saved == true && mounted) {
+      setState(() {});
+      _showSnack('Perjalanan manual tersimpan ✓');
+    }
+  }
+
   Future<void> _startTrip() async {
     if (_selectedVehicle == null) {
       _showSnack('Pilih kendaraan dulu.');
@@ -251,7 +321,7 @@ class _TripMapScreenState extends State<TripMapScreen>
     setState(() => _stopping = true);
 
     try {
-      final finished = await _service!.stopTrip();
+      final result = await _service!.stopTrip();
       if (!mounted) return;
 
       // Teardown service FIRST so the widget tree settles into idle state.
@@ -264,10 +334,14 @@ class _TripMapScreenState extends State<TripMapScreen>
 
       // Now show summary from a stable idle state. The dialog won't get
       // killed by a rebuild because the tree is already in its final form.
-      if (finished != null) {
+      if (result != null) {
         await Future.delayed(const Duration(milliseconds: 100));
         if (!mounted) return;
-        _showTripSummary(finished);
+        if (result.discarded) {
+          _showInvalidTripDialog(result.reason);
+        } else if (result.trip != null) {
+          _showTripSummary(result.trip!);
+        }
       }
     } catch (e) {
       if (mounted) setState(() => _stopping = false);
@@ -317,7 +391,7 @@ class _TripMapScreenState extends State<TripMapScreen>
       builder: (ctx) => AlertDialog(
         title: Text(
           'Izin lokasi diblokir',
-          style: AppEditorial.mono(
+          style: AppEditorial.heading(
             fontSize: 16,
             fontWeight: FontWeight.w700,
           ),
@@ -329,14 +403,14 @@ class _TripMapScreenState extends State<TripMapScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('NANTI'),
+            child: const Text('Nanti'),
           ),
           FilledButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
               await TripService.openLocationSettings();
             },
-            child: const Text('BUKA PENGATURAN'),
+            child: const Text('Buka pengaturan'),
           ),
         ],
       ),
@@ -353,7 +427,7 @@ class _TripMapScreenState extends State<TripMapScreen>
       builder: (ctx) => AlertDialog(
         title: Text(
           'Rute akan berhenti saat layar mati',
-          style: AppEditorial.mono(
+          style: AppEditorial.heading(
             fontSize: 16,
             fontWeight: FontWeight.w700,
           ),
@@ -366,25 +440,29 @@ class _TripMapScreenState extends State<TripMapScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('LANJUT SAJA'),
+            child: const Text('Lanjut saja'),
           ),
           FilledButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
               await TripService.openLocationSettings();
             },
-            child: const Text('BUKA PENGATURAN'),
+            child: const Text('Buka pengaturan'),
           ),
         ],
       ),
     );
   }
 
-  void _onAutoStopped(Trip trip) {
+  void _onAutoStopped(TripStopResult result) {
     if (!mounted) return;
     setState(() {});
     _startIdlePositionStream();
-    _showTripSummary(trip, autoStopped: true);
+    if (result.discarded) {
+      _showInvalidTripDialog(result.reason, autoStopped: true);
+    } else if (result.trip != null) {
+      _showTripSummary(result.trip!, autoStopped: true);
+    }
   }
 
   void _showTripSummary(Trip trip, {bool autoStopped = false}) {
@@ -403,12 +481,11 @@ class _TripMapScreenState extends State<TripMapScreen>
         return AlertDialog(
           title: Text(
             autoStopped
-                ? 'DIHENTIKAN OTOMATIS'
-                : 'PERJALANAN SELESAI',
-            style: AppEditorial.mono(
-              fontSize: 14,
+                ? 'Dihentikan otomatis'
+                : 'Perjalanan selesai',
+            style: AppEditorial.heading(
+              fontSize: 17,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.6,
               color: autoStopped ? AppEditorial.rust : null,
             ),
           ),
@@ -449,6 +526,74 @@ class _TripMapScreenState extends State<TripMapScreen>
           ],
         );
       },
+    );
+  }
+
+  /// Dialog yang muncul saat rekaman trip dibatalkan karena tidak lulus
+  /// validity check (terlalu pendek, tidak ada pergerakan, dll). Trip
+  /// row sudah dihapus dari DB jadi tidak akan muncul di history /
+  /// dipakai sebagai sample efisiensi.
+  void _showInvalidTripDialog(
+    TripDiscardReason reason, {
+    bool autoStopped = false,
+  }) {
+    final reasonText = switch (reason) {
+      TripDiscardReason.tooShortDuration =>
+        'Perjalanan kurang dari 30 detik. Rekaman dianggap tidak '
+            'valid dan tidak disimpan.',
+      TripDiscardReason.tooShortDistance =>
+        'Jarak tempuh kurang dari 100 meter. Rekaman dianggap tidak '
+            'valid dan tidak disimpan.',
+      TripDiscardReason.tooFewWaypoints =>
+        'GPS belum sempat mendapat sinyal yang cukup. Coba lagi '
+            'di area dengan langit terbuka.',
+      TripDiscardReason.none => '',
+    };
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Rekaman dibatalkan',
+          style: AppEditorial.heading(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: AppEditorial.rust,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (autoStopped) ...[
+              Text(
+                'Tidak ada pergerakan terdeteksi setelah perjalanan '
+                'dimulai.',
+                style: AppEditorial.sans(
+                  fontSize: 12,
+                  color: AppEditorial.inkSoft,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Text(
+              reasonText,
+              style: AppEditorial.sans(
+                fontSize: 13,
+                color: AppEditorial.ink,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -529,10 +674,18 @@ class _TripMapScreenState extends State<TripMapScreen>
                       height: 24,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: AppEditorial.butter,
+                          color: AppEditorial.brand,
                           border: Border.all(
-                              color: AppEditorial.ink, width: 2),
+                              color: AppEditorial.cream, width: 3),
                           shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppEditorial.ink
+                                  .withValues(alpha: 0.18),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -549,34 +702,33 @@ class _TripMapScreenState extends State<TripMapScreen>
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                        horizontal: 14, vertical: 9),
                     decoration: BoxDecoration(
-                      color: AppEditorial.canvas,
-                      border: Border.all(
-                          color: AppEditorial.ink, width: 1),
+                      color: AppEditorial.cream,
                       borderRadius:
-                          BorderRadius.circular(AppEditorial.rTiny),
+                          BorderRadius.circular(AppEditorial.rPill),
+                      boxShadow: AppEditorial.softShadow,
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          width: 6,
-                          height: 6,
+                          width: 7,
+                          height: 7,
                           decoration: BoxDecoration(
                             color: isTracking
-                                ? AppEditorial.rust
+                                ? AppEditorial.sage
                                 : AppEditorial.inkMuted,
                             shape: BoxShape.circle,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          isTracking ? 'TRACKING ACTIVE' : 'GPS READY',
-                          style: AppEditorial.mono(
-                            fontSize: 11,
+                          isTracking ? 'Merekam' : 'GPS siap',
+                          style: AppEditorial.sans(
+                            fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            letterSpacing: 0.6,
+                            color: AppEditorial.ink,
                           ),
                         ),
                       ],
@@ -589,28 +741,25 @@ class _TripMapScreenState extends State<TripMapScreen>
                       onTap: _showBackgroundUpgradeDialog,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 6),
+                            horizontal: 12, vertical: 9),
                         decoration: BoxDecoration(
                           color: AppEditorial.rust
                               .withValues(alpha: 0.12),
-                          border: Border.all(
-                              color: AppEditorial.rust, width: 1),
                           borderRadius: BorderRadius.circular(
-                              AppEditorial.rTiny),
+                              AppEditorial.rPill),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.warning_amber_rounded,
-                                size: 12, color: AppEditorial.rust),
-                            const SizedBox(width: 4),
+                            const Icon(PhosphorIconsRegular.warning,
+                                size: 13, color: AppEditorial.rust),
+                            const SizedBox(width: 5),
                             Text(
-                              'IZIN BG',
-                              style: AppEditorial.mono(
-                                fontSize: 9.5,
+                              'Izin lokasi',
+                              style: AppEditorial.sans(
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.w700,
                                 color: AppEditorial.rust,
-                                letterSpacing: 0.6,
                               ),
                             ),
                           ],
@@ -641,16 +790,15 @@ class _TripMapScreenState extends State<TripMapScreen>
                       } catch (_) {}
                     },
                     child: Container(
-                      height: 40,
-                      width: 40,
+                      height: 44,
+                      width: 44,
                       decoration: BoxDecoration(
-                        color: AppEditorial.canvas,
-                        border: Border.all(
-                            color: AppEditorial.ink, width: 1),
+                        color: AppEditorial.cream,
                         borderRadius:
                             BorderRadius.circular(AppEditorial.rTiny),
+                        boxShadow: AppEditorial.softShadow,
                       ),
-                      child: const Icon(Icons.my_location_rounded,
+                      child: const Icon(PhosphorIconsRegular.crosshair,
                           size: 18, color: AppEditorial.ink),
                     ),
                   ),
@@ -685,6 +833,7 @@ class _TripMapScreenState extends State<TripMapScreen>
               pointCount: positions.length,
               onStart: _startTrip,
               onStop: _stopTrip,
+              onManual: _openManualEntry,
             ),
           ),
         ],
@@ -709,13 +858,13 @@ class _VehicleSelector extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
       decoration: BoxDecoration(
-        color: AppEditorial.canvas,
-        border: Border.all(color: AppEditorial.ink, width: 1),
+        color: AppEditorial.cream,
         borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+        boxShadow: AppEditorial.softShadow,
       ),
       child: Row(
         children: [
-          Text('UNIT', style: AppEditorial.eyebrow()),
+          Text('Unit', style: AppEditorial.eyebrow()),
           const SizedBox(width: 10),
           Expanded(
             child: DropdownButtonHideUnderline(
@@ -725,18 +874,19 @@ class _VehicleSelector extends StatelessWidget {
                 isExpanded: true,
                 hint: Text('Pilih kendaraan',
                     style: AppEditorial.sans(fontSize: 13)),
-                icon: const Icon(Icons.expand_more_rounded,
+                icon: const Icon(PhosphorIconsRegular.caretDown,
                     color: AppEditorial.ink, size: 18),
-                style: AppEditorial.mono(
+                style: AppEditorial.sans(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
+                borderRadius: BorderRadius.circular(AppEditorial.rTiny),
                 dropdownColor: AppEditorial.cream,
                 items: vehicles.map((v) {
                   return DropdownMenuItem(
                     value: v,
                     child: Text(
-                      '${v.type.label.toUpperCase()} · ${v.name}',
+                      '${v.type.label} · ${v.name}',
                     ),
                   );
                 }).toList(),
@@ -759,6 +909,7 @@ class _BottomPanel extends StatelessWidget {
     required this.pointCount,
     required this.onStart,
     required this.onStop,
+    required this.onManual,
   });
 
   final bool isTracking;
@@ -768,48 +919,62 @@ class _BottomPanel extends StatelessWidget {
   final int pointCount;
   final VoidCallback onStart;
   final VoidCallback onStop;
+  final VoidCallback onManual;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppEditorial.canvas,
-        border: Border(
-          top: BorderSide(color: AppEditorial.ink, width: 1),
-        ),
+      decoration: BoxDecoration(
+        color: AppEditorial.cream,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        boxShadow: [
+          BoxShadow(
+            color: AppEditorial.ink.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, -6),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (isTracking) ...[
                 // Telemetry readout
-                Row(
-                  children: [
-                    Expanded(
-                      child: _Telemetry(
-                          label: 'JARAK', value: distText),
-                    ),
-                    Container(
-                        width: 1,
-                        height: 48,
-                        color: AppEditorial.hairline),
-                    Expanded(
-                      child:
-                          _Telemetry(label: 'DURASI', value: durText),
-                    ),
-                    Container(
-                        width: 1,
-                        height: 48,
-                        color: AppEditorial.hairline),
-                    Expanded(
-                      child: _Telemetry(
-                          label: 'TITIK', value: '$pointCount'),
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppEditorial.canvasSoft,
+                    borderRadius:
+                        BorderRadius.circular(AppEditorial.rTiny),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _Telemetry(
+                            label: 'JARAK', value: distText),
+                      ),
+                      Container(
+                          width: 1,
+                          height: 44,
+                          color: AppEditorial.hairline),
+                      Expanded(
+                        child:
+                            _Telemetry(label: 'DURASI', value: durText),
+                      ),
+                      Container(
+                          width: 1,
+                          height: 44,
+                          color: AppEditorial.hairline),
+                      Expanded(
+                        child: _Telemetry(
+                            label: 'TITIK', value: '$pointCount'),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 14),
                 FilledButton(
@@ -826,11 +991,14 @@ class _BottomPanel extends StatelessWidget {
                             color: AppEditorial.canvas,
                           ),
                         )
-                      : const Text('■ SELESAI PERJALANAN'),
+                      : const Text('Selesai perjalanan'),
                 ),
               ] else ...[
-                Text('REKAM PERJALANAN',
-                    style: AppEditorial.eyebrow()),
+                Text('Rekam perjalanan',
+                    style: AppEditorial.heading(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    )),
                 const SizedBox(height: 4),
                 Text(
                   'Tap mulai untuk merekam rute & jarak via GPS.',
@@ -839,10 +1007,19 @@ class _BottomPanel extends StatelessWidget {
                     color: AppEditorial.inkSoft,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 FilledButton(
                   onPressed: onStart,
-                  child: const Text('► MULAI PERJALANAN'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppEditorial.brand,
+                    foregroundColor: AppEditorial.ink,
+                  ),
+                  child: const Text('Mulai perjalanan'),
+                ),
+                const SizedBox(height: 4),
+                TextButton(
+                  onPressed: onManual,
+                  child: const Text('Catat manual'),
                 ),
               ],
             ],

@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../trip/trip_detail_page.dart';
+import 'history_tab.dart';
 
 enum _Range { week, month, year }
+
+enum _View { grafik, riwayat }
 
 class AnalyticsTab extends StatefulWidget {
   const AnalyticsTab({super.key});
@@ -19,6 +23,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   final _repo = SupabaseRepository.ofDefaultClient();
 
   _Range _range = _Range.week;
+  _View _view = _View.grafik;
 
   final _rupiah = NumberFormat.currency(
     locale: 'id_ID',
@@ -28,10 +33,47 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Segmented control: Grafik | Riwayat
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppEditorial.canvasSoft,
+              borderRadius: BorderRadius.circular(AppEditorial.rPill),
+            ),
+            child: Row(
+              children: [
+                _ViewTab(
+                  label: 'Grafik',
+                  selected: _view == _View.grafik,
+                  onTap: () => setState(() => _view = _View.grafik),
+                ),
+                _ViewTab(
+                  label: 'Riwayat',
+                  selected: _view == _View.riwayat,
+                  onTap: () => setState(() => _view = _View.riwayat),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: _view == _View.grafik
+              ? _buildGrafik(context)
+              : const HistoryTab(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGrafik(BuildContext context) {
     return RefreshIndicator(
       onRefresh: () async => setState(() {}),
       color: AppEditorial.ink,
-      backgroundColor: AppEditorial.canvas,
+      backgroundColor: AppEditorial.cream,
       child: FutureBuilder<(List<Refuel>, List<Trip>)>(
         future: () async {
           final now = DateTime.now();
@@ -47,7 +89,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             return _Centered(text: snap.error.toString());
           }
           final data = snap.data;
-          if (data == null) return const _Centered(loading: true);
+          if (data == null) return const _GrafikSkeleton();
 
           final refuels = data.$1;
           final monthTrips = data.$2;
@@ -72,78 +114,86 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   refuels.length;
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 140),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 140),
             children: [
-              // §01 Total
-              const EditorialSectionHeader(
-                index: '01',
-                label: 'TOTAL PERIODE',
-              ),
-              const SizedBox(height: 14),
+              // Total periode — kartu brand
               Container(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: AppEditorial.butter,
-                  borderRadius:
-                      BorderRadius.circular(AppEditorial.rCard),
+                  color: AppEditorial.brand,
+                  borderRadius: BorderRadius.circular(AppEditorial.rCard),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(_rangeLabel(_range),
-                        style: AppEditorial.eyebrow()),
-                    const SizedBox(height: 6),
+                        style: AppEditorial.sans(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppEditorial.ink.withValues(alpha: 0.65),
+                        )),
+                    const SizedBox(height: 8),
                     EditorialReadout(
                       prefix: 'Rp ',
                       value: _rupiah.format(total).trim(),
                       fontSize: 38,
+                      color: AppEditorial.ink,
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _MiniStat(
-                      label: 'LITER BULAN',
-                      value: '${totalLiter.toStringAsFixed(2)} L',
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppEditorial.cream,
+                  borderRadius: BorderRadius.circular(AppEditorial.rCard),
+                  boxShadow: AppEditorial.softShadow,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _MiniStat(
+                        label: 'Liter bulan ini',
+                        value: '${totalLiter.toStringAsFixed(2)} L',
+                      ),
                     ),
-                  ),
-                  Container(
-                      width: 1, height: 56, color: AppEditorial.hairline),
-                  Expanded(
-                    child: _MiniStat(
-                      label: 'RATA-RATA / ISI',
-                      value: 'Rp ${_rupiah.format(avgPerRefuel).trim()}',
+                    Container(
+                        width: 1,
+                        height: 44,
+                        color: AppEditorial.hairlineSoft),
+                    Expanded(
+                      child: _MiniStat(
+                        label: 'Rata-rata / isi',
+                        value:
+                            'Rp ${_rupiah.format(avgPerRefuel).trim()}',
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 28),
 
-              // §02 Range tabs + chart
               const EditorialSectionHeader(
-                index: '02',
-                label: 'GRAFIK PENGELUARAN',
+                label: 'Grafik pengeluaran',
               ),
               const SizedBox(height: 14),
               Row(
                 children: [
                   _RangeTab(
-                    label: 'MINGGU',
+                    label: 'Minggu',
                     selected: _range == _Range.week,
                     onTap: () => setState(() => _range = _Range.week),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   _RangeTab(
-                    label: 'BULAN',
+                    label: 'Bulan',
                     selected: _range == _Range.month,
                     onTap: () => setState(() => _range = _Range.month),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   _RangeTab(
-                    label: 'TAHUN',
+                    label: 'Tahun',
                     selected: _range == _Range.year,
                     onTap: () => setState(() => _range = _Range.year),
                   ),
@@ -151,28 +201,23 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               ),
               const SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
                 decoration: BoxDecoration(
                   color: AppEditorial.cream,
-                  border:
-                      Border.all(color: AppEditorial.hairlineSoft, width: 1),
-                  borderRadius:
-                      BorderRadius.circular(AppEditorial.rCard),
+                  borderRadius: BorderRadius.circular(AppEditorial.rCard),
+                  boxShadow: AppEditorial.softShadow,
                 ),
                 child: _MiniBars(points: points, rupiah: _rupiah),
               ),
               const SizedBox(height: 28),
 
-              // §03 Jarak tempuh GPS
               const EditorialSectionHeader(
-                index: '03',
-                label: 'JARAK TEMPUH (BULAN INI)',
+                label: 'Jarak tempuh bulan ini',
               ),
               const SizedBox(height: 14),
               _TripStats(trips: monthTrips),
               const SizedBox(height: 28),
 
-              // §04 Riwayat trip
               FutureBuilder<List<Trip>>(
                 future: _repo.listTrips(),
                 builder: (context, tripSnap) {
@@ -181,12 +226,15 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       EditorialSectionHeader(
-                        index: '04',
-                        label: 'RIWAYAT PERJALANAN',
-                        trailing: Text('${trips.length} TRIP',
-                            style: AppEditorial.eyebrow()),
+                        label: 'Riwayat perjalanan',
+                        trailing: Text('${trips.length} trip',
+                            style: AppEditorial.sans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppEditorial.inkMuted,
+                            )),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       if (tripSnap.connectionState ==
                           ConnectionState.waiting)
                         const Padding(
@@ -197,24 +245,47 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                           ),
                         )
                       else if (trips.isEmpty)
-                        Padding(
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 16),
-                          child: Text(
-                            'belum ada perjalanan terekam.',
-                            style: AppEditorial.sans(
-                              fontSize: 13,
-                              color: AppEditorial.inkSoft,
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          decoration: BoxDecoration(
+                            color: AppEditorial.cream,
+                            borderRadius:
+                                BorderRadius.circular(AppEditorial.rCard),
+                            boxShadow: AppEditorial.softShadow,
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Belum ada perjalanan terekam.',
+                              style: AppEditorial.sans(
+                                fontSize: 13,
+                                color: AppEditorial.inkMuted,
+                              ),
                             ),
                           ),
                         )
                       else
-                        ...trips.take(5).toList().asMap().entries.map(
-                              (e) => _TripRow(
-                                trip: e.value,
-                                isLast: e.key == trips.take(5).length - 1,
-                              ),
-                            ),
+                        Container(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 18),
+                          decoration: BoxDecoration(
+                            color: AppEditorial.cream,
+                            borderRadius:
+                                BorderRadius.circular(AppEditorial.rCard),
+                            boxShadow: AppEditorial.softShadow,
+                          ),
+                          child: Column(
+                            children: [
+                              for (var i = 0;
+                                  i < trips.take(5).length;
+                                  i++)
+                                _TripRow(
+                                  trip: trips[i],
+                                  isLast: i == trips.take(5).length - 1,
+                                  onChanged: () => setState(() {}),
+                                ),
+                            ],
+                          ),
+                        ),
                     ],
                   );
                 },
@@ -227,9 +298,9 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   }
 
   String _rangeLabel(_Range r) => switch (r) {
-        _Range.week => '7 HARI TERAKHIR',
-        _Range.month => '6 BULAN TERAKHIR',
-        _Range.year => '5 TAHUN TERAKHIR',
+        _Range.week => '7 hari terakhir',
+        _Range.month => '6 bulan terakhir',
+        _Range.year => '5 tahun terakhir',
       };
 
   List<_Point> _buildSeries(List<Refuel> all, _Range range) {
@@ -237,17 +308,16 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
 
     switch (range) {
       case _Range.week:
-        final start =
-            DateTime(now.year, now.month, now.day)
-                .subtract(const Duration(days: 6));
+        final start = DateTime(now.year, now.month, now.day)
+            .subtract(const Duration(days: 6));
         final days = List.generate(
           7,
           (i) => DateTime(start.year, start.month, start.day + i),
         );
         final byDay = <String, num>{};
         for (final r in all) {
-          final d = DateTime(r.refuelDate.year, r.refuelDate.month,
-              r.refuelDate.day);
+          final d = DateTime(
+              r.refuelDate.year, r.refuelDate.month, r.refuelDate.day);
           if (d.isBefore(days.first) || d.isAfter(days.last)) continue;
           final key = '${d.year}-${d.month}-${d.day}';
           byDay[key] = (byDay[key] ?? 0) + r.totalRp;
@@ -305,22 +375,68 @@ class _MiniStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppEditorial.eyebrow(fontSize: 9.5)),
+          Text(label,
+              style: AppEditorial.sans(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: AppEditorial.inkSoft,
+              )),
           const SizedBox(height: 6),
           Text(
             value,
-            style: AppEditorial.mono(
-              fontSize: 16,
+            style: AppEditorial.heading(
+              fontSize: 17,
               fontWeight: FontWeight.w700,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ViewTab extends StatelessWidget {
+  const _ViewTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          decoration: BoxDecoration(
+            color: selected ? AppEditorial.ink : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppEditorial.rPill),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: AppEditorial.heading(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: selected
+                  ? const Color(0xFFFFFFFF)
+                  : AppEditorial.inkSoft,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -342,22 +458,20 @@ class _RangeTab extends StatelessWidget {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(vertical: 11),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? AppEditorial.ink : AppEditorial.canvas,
-            border: Border.all(color: AppEditorial.ink, width: 1),
-            borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+            color: selected ? AppEditorial.brand : AppEditorial.canvasSoft,
+            borderRadius: BorderRadius.circular(AppEditorial.rPill),
           ),
           child: Text(
             label,
-            style: AppEditorial.mono(
-              fontSize: 11,
+            style: AppEditorial.sans(
+              fontSize: 13,
               fontWeight: FontWeight.w700,
-              color:
-                  selected ? AppEditorial.canvas : AppEditorial.ink,
-              letterSpacing: 0.6,
+              color: selected ? AppEditorial.ink : AppEditorial.inkSoft,
             ),
           ),
         ),
@@ -386,7 +500,7 @@ class _MiniBars extends StatelessWidget {
           for (final p in points)
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   mainAxisSize: MainAxisSize.min,
@@ -394,17 +508,17 @@ class _MiniBars extends StatelessWidget {
                     if (p.value > 0)
                       Text(
                         p.value >= 1000000
-                            ? '${(p.value / 1000000).toStringAsFixed(1)}M'
+                            ? '${(p.value / 1000000).toStringAsFixed(1)}jt'
                             : p.value >= 1000
-                                ? '${(p.value / 1000).toStringAsFixed(0)}K'
+                                ? '${(p.value / 1000).toStringAsFixed(0)}rb'
                                 : p.value.toStringAsFixed(0),
-                        style: AppEditorial.mono(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color: AppEditorial.ink,
+                        style: AppEditorial.sans(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppEditorial.inkSoft,
                         ),
                       ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 600),
                       curve: Curves.easeOutCubic,
@@ -412,19 +526,19 @@ class _MiniBars extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: p.value <= 0
                             ? AppEditorial.hairline
-                            : AppEditorial.butter,
+                            : AppEditorial.brand,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(8),
+                        ),
                       ),
                     ),
-                    Container(
-                      height: 1,
-                      color: AppEditorial.ink,
-                    ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 8),
                     Text(
                       p.label,
-                      style: AppEditorial.mono(
-                        fontSize: 9.5,
-                        color: AppEditorial.inkSoft,
+                      style: AppEditorial.sans(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppEditorial.inkMuted,
                       ),
                     ),
                   ],
@@ -461,22 +575,29 @@ class _TripStats extends StatelessWidget {
             .reduce((a, b) => a > b ? a : b);
 
     if (trips.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Text(
-          'belum ada GPS trip bulan ini.',
-          style: AppEditorial.sans(
-              fontSize: 13, color: AppEditorial.inkSoft),
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        decoration: BoxDecoration(
+          color: AppEditorial.cream,
+          borderRadius: BorderRadius.circular(AppEditorial.rCard),
+          boxShadow: AppEditorial.softShadow,
+        ),
+        child: Center(
+          child: Text(
+            'Belum ada GPS trip bulan ini.',
+            style: AppEditorial.sans(
+                fontSize: 13, color: AppEditorial.inkMuted),
+          ),
         ),
       );
     }
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
       decoration: BoxDecoration(
         color: AppEditorial.cream,
-        border: Border.all(color: AppEditorial.hairlineSoft, width: 1),
         borderRadius: BorderRadius.circular(AppEditorial.rCard),
+        boxShadow: AppEditorial.softShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -487,25 +608,25 @@ class _TripStats extends StatelessWidget {
             children: [
               Text(
                 totalKm.toStringAsFixed(1),
-                style: AppEditorial.mono(
+                style: AppEditorial.heading(
                   fontSize: 38,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -1,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -1.4,
                   height: 1.0,
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 5),
               Text(
                 'km',
-                style: AppEditorial.mono(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                style: AppEditorial.heading(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                   color: AppEditorial.inkSoft,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           EditorialDataRow(
             label: 'Jumlah trip',
             value: '$tripCount trip',
@@ -526,9 +647,10 @@ class _TripStats extends StatelessWidget {
 }
 
 class _TripRow extends StatelessWidget {
-  const _TripRow({required this.trip, required this.isLast});
+  const _TripRow({required this.trip, required this.isLast, this.onChanged});
   final Trip trip;
   final bool isLast;
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -540,72 +662,63 @@ class _TripRow extends StatelessWidget {
         : (trip.isActive ? 'aktif' : '—');
 
     final duration = trip.endedAt?.difference(trip.startedAt);
-    final durText = duration != null
-        ? '${duration.inMinutes}m'
-        : '—';
+    final durText = duration != null ? '${duration.inMinutes} mnt' : '—';
 
     return InkWell(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-            builder: (_) => TripDetailPage(trip: trip)),
-      ),
+      onTap: () async {
+        final changed = await Navigator.of(context).push<bool>(
+          MaterialPageRoute<bool>(
+              builder: (_) => TripDetailPage(trip: trip)),
+        );
+        if (changed == true) onChanged?.call();
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
-              color: isLast
-                  ? Colors.transparent
-                  : AppEditorial.hairline,
+              color: isLast ? Colors.transparent : AppEditorial.hairlineSoft,
               width: 1,
             ),
           ),
         ),
         child: Row(
           children: [
-            SizedBox(
-              width: 64,
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppEditorial.brandTint,
+                borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+              ),
+              child: const Icon(PhosphorIconsRegular.path,
+                  size: 20, color: AppEditorial.brandDeep),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    dateFmt.format(trip.startedAt),
-                    style: AppEditorial.mono(
-                      fontSize: 13,
+                    distText,
+                    style: AppEditorial.heading(
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
-                    timeFmt.format(trip.startedAt),
-                    style: AppEditorial.mono(
-                      fontSize: 11,
+                    '${dateFmt.format(trip.startedAt)} · ${timeFmt.format(trip.startedAt)} · $durText',
+                    style: AppEditorial.sans(
+                      fontSize: 12,
                       color: AppEditorial.inkSoft,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                distText,
-                style: AppEditorial.mono(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            Text(
-              durText,
-              style: AppEditorial.mono(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppEditorial.butterDeep,
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(Icons.arrow_forward_rounded,
-                size: 14, color: AppEditorial.inkSoft),
+            const Icon(PhosphorIconsRegular.caretRight,
+                size: 20, color: AppEditorial.inkMuted),
           ],
         ),
       ),
@@ -614,9 +727,8 @@ class _TripRow extends StatelessWidget {
 }
 
 class _Centered extends StatelessWidget {
-  const _Centered({this.text, this.loading = false});
+  const _Centered({this.text});
   final String? text;
-  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -625,19 +737,154 @@ class _Centered extends StatelessWidget {
       children: [
         const SizedBox(height: 200),
         Center(
-          child: loading
-              ? const CircularProgressIndicator(color: AppEditorial.ink)
-              : Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Text(
-                    text ?? '',
-                    style: AppEditorial.sans(
-                      fontSize: 13,
-                      color: AppEditorial.inkSoft,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Text(
+              text ?? '',
+              style: AppEditorial.sans(
+                fontSize: 13,
+                color: AppEditorial.inkSoft,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Skeleton loading — tampilan grafik
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _GrafikSkeleton extends StatelessWidget {
+  const _GrafikSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 140),
+      children: [
+        // Total periode — kartu brand
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppEditorial.brand,
+            borderRadius: BorderRadius.circular(AppEditorial.rCard),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Skeleton(width: 120, height: 12, baseColor: Color(0xFFE9B528)),
+              SizedBox(height: 12),
+              Skeleton(width: 200, height: 34, baseColor: Color(0xFFE9B528)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppEditorial.cream,
+            borderRadius: BorderRadius.circular(AppEditorial.rCard),
+            boxShadow: AppEditorial.softShadow,
+          ),
+          child: Row(
+            children: const [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Skeleton(width: 90, height: 11),
+                    SizedBox(height: 8),
+                    Skeleton(width: 70, height: 18),
+                  ],
                 ),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Skeleton(width: 90, height: 11),
+                    SizedBox(height: 8),
+                    Skeleton(width: 80, height: 18),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 28),
+        const Skeleton(width: 180, height: 18),
+        const SizedBox(height: 14),
+        Row(
+          children: const [
+            Skeleton(width: 72, height: 38, radius: AppEditorial.rPill),
+            SizedBox(width: 8),
+            Skeleton(width: 66, height: 38, radius: AppEditorial.rPill),
+            SizedBox(width: 8),
+            Skeleton(width: 66, height: 38, radius: AppEditorial.rPill),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // Chart card — batang-batang
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
+          decoration: BoxDecoration(
+            color: AppEditorial.cream,
+            borderRadius: BorderRadius.circular(AppEditorial.rCard),
+            boxShadow: AppEditorial.softShadow,
+          ),
+          child: SizedBox(
+            height: 160,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                for (final h in [70.0, 110.0, 50.0, 140.0, 90.0, 120.0, 60.0])
+                  Skeleton(width: 22, height: h, radius: 6),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 28),
+        const Skeleton(width: 200, height: 18),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppEditorial.cream,
+            borderRadius: BorderRadius.circular(AppEditorial.rCard),
+            boxShadow: AppEditorial.softShadow,
+          ),
+          child: Row(
+            children: const [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Skeleton(width: 80, height: 11),
+                    SizedBox(height: 8),
+                    Skeleton(width: 100, height: 22),
+                  ],
+                ),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Skeleton(width: 80, height: 11),
+                    SizedBox(height: 8),
+                    Skeleton(width: 100, height: 22),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );

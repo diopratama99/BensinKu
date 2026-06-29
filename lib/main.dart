@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'app/app.dart';
 import 'config/app_config.dart';
+import 'services/google_auth_service.dart';
 import 'services/notification_service.dart';
 import 'services/supabase_bootstrap.dart';
 
@@ -35,6 +36,10 @@ Future<void> main() async {
 
   final config = AppConfig.fromEnv();
   final supabaseReady = await SupabaseBootstrap.tryInitialize(config);
+
+  // Make Google client IDs available to the sign-in service (set once).
+  GoogleAuthService.webClientId = config.googleWebClientId;
+  GoogleAuthService.iosClientId = config.googleIosClientId;
 
   // Semua init selesai → hapus splash
   FlutterNativeSplash.remove();

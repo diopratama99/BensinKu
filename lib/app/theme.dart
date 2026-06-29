@@ -1,44 +1,76 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// BensinKu — Editorial Mono theme.
+/// BensinKu — Design System.
 ///
-/// Vibe: car service manual / fuel pump LCD / paper logbook.
-/// NOT: magazine blog post.
+/// Arah: aplikasi finansial/utilitas modern bergaya digital-bank (MyPertamina,
+/// Livin', Jago, blu). Light mode, identitas kuat lewat panel brand kuning,
+/// kartu putih bersih, dan tipografi berkarakter. Flat, tanpa gradient.
 ///
 /// Typography:
-///   - IBM Plex Mono — numbers, labels, eyebrows, headlines, masthead
-///   - IBM Plex Sans — body text, descriptions, UI prose
-///
-/// Color:
-///   - Cream paper canvas, butter spot accent, ink near-black text.
+///   - Sora — angka, total, judul, wordmark (geometris, percaya diri)
+///   - Inter — body, label, caption, prosa UI
 class AppEditorial {
-  // ── Palette ──────────────────────────────────────────────────────────
-  static const Color canvas = Color(0xFFF6EFDF);
-  static const Color canvasSoft = Color(0xFFFBF5E7);
+  // ── Brand ────────────────────────────────────────────────────────────
+  /// Kuning brand utama — dipakai sebagai blok warna besar (hero panel).
+  static const Color brand = Color(0xFFF5BE2E);
+  static const Color brandBright = Color(0xFFFFD34E);
+  static const Color brandDeep = Color(0xFF8A5E10);
+  static const Color brandSoft = Color(0xFFFCEFC9);
+  static const Color brandTint = Color(0xFFFBF4DE);
 
-  static const Color butter = Color(0xFFE9B341);
-  static const Color butterDeep = Color(0xFFB6841C);
-  static const Color butterSoft = Color(0xFFF6DC9F);
+  // Alias lama (tetap dipakai banyak call-site).
+  static const Color butter = brand;
+  static const Color butterDeep = brandDeep;
+  static const Color butterSoft = brandSoft;
 
-  static const Color cream = Color(0xFFFFF7E6);
+  // ── Neutral ──────────────────────────────────────────────────────────
+  /// Latar aplikasi — abu sangat terang netral hangat (khas app perbankan).
+  static const Color canvas = Color(0xFFF3F2EF);
+  static const Color canvasSoft = Color(0xFFF8F7F4);
 
-  static const Color ink = Color(0xFF1A0F03);
-  static const Color inkSoft = Color(0xFF6B5A45);
-  static const Color inkMuted = Color(0xFF8E7B62);
+  /// Permukaan kartu — putih bersih.
+  static const Color cream = Color(0xFFFFFFFF);
 
-  static const Color hairline = Color(0xFFD9CCAC);
-  static const Color hairlineSoft = Color(0xFFEBE2C8);
+  /// Teks.
+  static const Color ink = Color(0xFF1B1A17);
+  static const Color inkSoft = Color(0xFF5E5A52);
+  static const Color inkMuted = Color(0xFF9A958A);
 
-  static const Color sage = Color(0xFF5C7042);
-  static const Color rust = Color(0xFFA8391A);
+  /// Garis & pemisah.
+  static const Color hairline = Color(0xFFEAE7E0);
+  static const Color hairlineSoft = Color(0xFFF1EFE9);
 
-  // ── Radii — kept tight, like terminal boxes ─────────────────────────
-  static const double rCard = 6;
-  static const double rButton = 4;
+  /// Status.
+  static const Color sage = Color(0xFF3F7D51);
+  static const Color sageSoft = Color(0xFFE3EFE5);
+  static const Color rust = Color(0xFFC8482E);
+  static const Color rustSoft = Color(0xFFF7E2DB);
+
+  // ── Radii ──────────────────────────────────────────────────────────
+  static const double rCard = 24;
+  static const double rButton = 16;
   static const double rPill = 999;
-  static const double rTiny = 2;
+  static const double rTiny = 14;
+
+  // ── Bayangan halus (no gradient) ─────────────────────────────────────
+  static List<BoxShadow> get softShadow => [
+        BoxShadow(
+          color: const Color(0xFF1B1A17).withValues(alpha: 0.04),
+          blurRadius: 18,
+          offset: const Offset(0, 6),
+        ),
+      ];
+
+  static List<BoxShadow> get brandShadow => [
+        BoxShadow(
+          color: brand.withValues(alpha: 0.32),
+          blurRadius: 22,
+          offset: const Offset(0, 10),
+        ),
+      ];
 
   // ── Tabular figures ──────────────────────────────────────────────────
   static const List<FontFeature> tabularFigures = [
@@ -47,26 +79,26 @@ class AppEditorial {
   ];
 
   // ── Style helpers ────────────────────────────────────────────────────
-  /// Mono — for numbers, codes, eyebrows, headlines.
+  /// Numerik — angka, total, nominal (Sora, tegas & rapi).
   static TextStyle mono({
     required double fontSize,
-    FontWeight fontWeight = FontWeight.w400,
+    FontWeight fontWeight = FontWeight.w600,
     Color? color,
     double? letterSpacing,
     double? height,
     bool tabular = true,
   }) {
-    return GoogleFonts.ibmPlexMono(
+    return GoogleFonts.sora(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color ?? ink,
-      letterSpacing: letterSpacing,
+      letterSpacing: letterSpacing ?? -0.3,
       height: height,
       fontFeatures: tabular ? tabularFigures : null,
     );
   }
 
-  /// Sans — for body prose, descriptions.
+  /// Sans — body text, label, caption, prosa UI.
   static TextStyle sans({
     required double fontSize,
     FontWeight fontWeight = FontWeight.w400,
@@ -75,7 +107,7 @@ class AppEditorial {
     double? height,
     bool tabular = false,
   }) {
-    return GoogleFonts.ibmPlexSans(
+    return GoogleFonts.inter(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color ?? ink,
@@ -85,17 +117,34 @@ class AppEditorial {
     );
   }
 
-  /// `[LABEL]` eyebrow style — uppercase mono, wide-tracked.
-  static TextStyle eyebrow({
-    double fontSize = 10.5,
+  /// Heading — display, judul besar, wordmark (Sora).
+  static TextStyle heading({
+    required double fontSize,
+    FontWeight fontWeight = FontWeight.w700,
     Color? color,
-    FontWeight fontWeight = FontWeight.w600,
+    double? letterSpacing,
+    double? height,
   }) {
-    return GoogleFonts.ibmPlexMono(
+    return GoogleFonts.sora(
       fontSize: fontSize,
       fontWeight: fontWeight,
-      color: color ?? inkSoft,
-      letterSpacing: 0.4,
+      color: color ?? ink,
+      letterSpacing: letterSpacing ?? -0.4,
+      height: height,
+    );
+  }
+
+  /// Eyebrow — label kecil uppercase (Inter, korporat).
+  static TextStyle eyebrow({
+    double fontSize = 11,
+    Color? color,
+    FontWeight fontWeight = FontWeight.w700,
+  }) {
+    return GoogleFonts.inter(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color ?? inkMuted,
+      letterSpacing: 0.8,
       height: 1.2,
     );
   }
@@ -106,24 +155,24 @@ class AppTheme {
     const colorScheme = ColorScheme(
       brightness: Brightness.light,
       primary: AppEditorial.ink,
-      onPrimary: AppEditorial.canvas,
-      primaryContainer: AppEditorial.butterSoft,
+      onPrimary: Color(0xFFFFFFFF),
+      primaryContainer: AppEditorial.brandSoft,
       onPrimaryContainer: AppEditorial.ink,
-      secondary: AppEditorial.butterDeep,
-      onSecondary: AppEditorial.canvas,
-      secondaryContainer: AppEditorial.cream,
+      secondary: AppEditorial.brandDeep,
+      onSecondary: Color(0xFFFFFFFF),
+      secondaryContainer: AppEditorial.brandSoft,
       onSecondaryContainer: AppEditorial.ink,
       tertiary: AppEditorial.sage,
       onTertiary: Color(0xFFFFFFFF),
-      tertiaryContainer: Color(0xFFD8DEC2),
-      onTertiaryContainer: Color(0xFF263014),
+      tertiaryContainer: AppEditorial.sageSoft,
+      onTertiaryContainer: Color(0xFF1F3A28),
       error: AppEditorial.rust,
       onError: Color(0xFFFFFFFF),
-      errorContainer: Color(0xFFF5D5C5),
-      onErrorContainer: Color(0xFF4F1A07),
-      surface: AppEditorial.canvas,
+      errorContainer: AppEditorial.rustSoft,
+      onErrorContainer: Color(0xFF52200F),
+      surface: AppEditorial.cream,
       onSurface: AppEditorial.ink,
-      surfaceContainerHighest: AppEditorial.cream,
+      surfaceContainerHighest: AppEditorial.canvasSoft,
       onSurfaceVariant: AppEditorial.inkSoft,
       outline: AppEditorial.inkMuted,
       outlineVariant: AppEditorial.hairline,
@@ -131,25 +180,29 @@ class AppTheme {
       scrim: Color(0xFF000000),
       inverseSurface: AppEditorial.ink,
       onInverseSurface: AppEditorial.canvas,
-      inversePrimary: AppEditorial.butter,
-      surfaceTint: AppEditorial.butter,
+      inversePrimary: AppEditorial.brand,
+      surfaceTint: Colors.transparent,
     );
 
-    final inputBorder = UnderlineInputBorder(
-      borderSide: BorderSide(color: AppEditorial.hairline, width: 1),
-    );
+    OutlineInputBorder inputBorder(Color color, [double width = 1.4]) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppEditorial.rButton),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
 
     final base = ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppEditorial.canvas,
+      splashFactory: InkSparkle.splashFactory,
       appBarTheme: const AppBarTheme(
         backgroundColor: AppEditorial.canvas,
         foregroundColor: AppEditorial.ink,
         centerTitle: false,
         elevation: 0,
         scrolledUnderElevation: 0,
-        surfaceTintColor: AppEditorial.canvas,
+        surfaceTintColor: Colors.transparent,
         toolbarHeight: 56,
         iconTheme: IconThemeData(color: AppEditorial.ink),
         systemOverlayStyle: SystemUiOverlayStyle(
@@ -163,10 +216,10 @@ class AppTheme {
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         color: AppEditorial.cream,
+        shadowColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius:
               BorderRadius.all(Radius.circular(AppEditorial.rCard)),
-          side: BorderSide(color: AppEditorial.hairlineSoft, width: 1),
         ),
         surfaceTintColor: Colors.transparent,
       ),
@@ -177,54 +230,46 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         isDense: true,
-        filled: false,
-        border: inputBorder,
-        enabledBorder: inputBorder,
-        focusedBorder: inputBorder.copyWith(
-          borderSide:
-              const BorderSide(color: AppEditorial.ink, width: 1.5),
-        ),
-        errorBorder: inputBorder.copyWith(
-          borderSide:
-              const BorderSide(color: AppEditorial.rust, width: 1.2),
-        ),
-        focusedErrorBorder: inputBorder.copyWith(
-          borderSide:
-              const BorderSide(color: AppEditorial.rust, width: 1.5),
-        ),
+        filled: true,
+        fillColor: AppEditorial.canvasSoft,
+        border: inputBorder(Colors.transparent),
+        enabledBorder: inputBorder(Colors.transparent),
+        focusedBorder: inputBorder(AppEditorial.ink, 1.6),
+        errorBorder: inputBorder(AppEditorial.rust),
+        focusedErrorBorder: inputBorder(AppEditorial.rust, 1.6),
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
-        labelStyle: GoogleFonts.ibmPlexMono(
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+        labelStyle: GoogleFonts.inter(
           color: AppEditorial.inkSoft,
           fontWeight: FontWeight.w600,
-          fontSize: 10.5,
-          letterSpacing: 0.4,
+          fontSize: 13.5,
         ),
-        floatingLabelStyle: GoogleFonts.ibmPlexMono(
+        floatingLabelStyle: GoogleFonts.inter(
           color: AppEditorial.ink,
           fontWeight: FontWeight.w700,
-          fontSize: 10.5,
-          letterSpacing: 0.4,
+          fontSize: 13,
         ),
-        hintStyle: GoogleFonts.ibmPlexSans(
+        hintStyle: GoogleFonts.inter(
           color: AppEditorial.inkMuted,
           fontWeight: FontWeight.w400,
-          fontSize: 14,
+          fontSize: 14.5,
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppEditorial.ink,
-          foregroundColor: AppEditorial.canvas,
+          foregroundColor: const Color(0xFFFFFFFF),
+          disabledBackgroundColor: AppEditorial.hairline,
+          disabledForegroundColor: AppEditorial.inkMuted,
           shape: const RoundedRectangleBorder(
             borderRadius:
                 BorderRadius.all(Radius.circular(AppEditorial.rButton)),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-          textStyle: GoogleFonts.ibmPlexMono(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+          textStyle: GoogleFonts.sora(
             fontWeight: FontWeight.w700,
-            fontSize: 12,
-            letterSpacing: 0.6,
+            fontSize: 15,
+            letterSpacing: -0.2,
           ),
           elevation: 0,
         ),
@@ -232,56 +277,51 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppEditorial.ink,
-          side: const BorderSide(color: AppEditorial.ink, width: 1.2),
+          side: const BorderSide(color: AppEditorial.hairline, width: 1.4),
           shape: const RoundedRectangleBorder(
             borderRadius:
                 BorderRadius.all(Radius.circular(AppEditorial.rButton)),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
-          textStyle: GoogleFonts.ibmPlexMono(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 17),
+          textStyle: GoogleFonts.sora(
             fontWeight: FontWeight.w700,
-            fontSize: 12,
-            letterSpacing: 0.6,
+            fontSize: 15,
+            letterSpacing: -0.2,
           ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppEditorial.ink,
-          textStyle: GoogleFonts.ibmPlexMono(
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-            letterSpacing: 0.4,
+          foregroundColor: AppEditorial.brandDeep,
+          textStyle: GoogleFonts.inter(
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
           ),
         ),
       ),
       chipTheme: ChipThemeData(
-        side: const BorderSide(color: AppEditorial.hairline, width: 1),
-        shape: const RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.all(Radius.circular(AppEditorial.rTiny)),
-        ),
-        backgroundColor: AppEditorial.cream,
-        selectedColor: AppEditorial.butter,
-        labelStyle: GoogleFonts.ibmPlexMono(
-          fontSize: 11,
+        side: BorderSide.none,
+        shape: const StadiumBorder(),
+        backgroundColor: AppEditorial.canvasSoft,
+        selectedColor: AppEditorial.brand,
+        labelStyle: GoogleFonts.inter(
+          fontSize: 13,
           fontWeight: FontWeight.w600,
           color: AppEditorial.ink,
-          letterSpacing: 0.4,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppEditorial.ink,
-        contentTextStyle: GoogleFonts.ibmPlexMono(
-          color: AppEditorial.canvas,
+        contentTextStyle: GoogleFonts.inter(
+          color: const Color(0xFFFFFFFF),
           fontWeight: FontWeight.w500,
-          fontSize: 13,
+          fontSize: 13.5,
         ),
         shape: const RoundedRectangleBorder(
           borderRadius:
-              BorderRadius.all(Radius.circular(AppEditorial.rTiny)),
+              BorderRadius.all(Radius.circular(AppEditorial.rButton)),
         ),
         elevation: 0,
       ),
@@ -291,16 +331,18 @@ class AppTheme {
         minLeadingWidth: 0,
       ),
       switchTheme: SwitchThemeData(
-        thumbColor:
-            const WidgetStatePropertyAll(AppEditorial.canvas),
+        thumbColor: const WidgetStatePropertyAll(Color(0xFFFFFFFF)),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) return AppEditorial.ink;
           return AppEditorial.hairline;
         }),
+        trackOutlineColor:
+            const WidgetStatePropertyAll(Colors.transparent),
       ),
       dialogTheme: const DialogThemeData(
         backgroundColor: AppEditorial.cream,
         surfaceTintColor: Colors.transparent,
+        elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius:
               BorderRadius.all(Radius.circular(AppEditorial.rCard)),
@@ -310,8 +352,9 @@ class AppTheme {
         backgroundColor: AppEditorial.canvas,
         surfaceTintColor: Colors.transparent,
         modalBackgroundColor: AppEditorial.canvas,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
         ),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
@@ -319,116 +362,104 @@ class AppTheme {
       ),
     );
 
-    // All headlines = mono, NOT italic, NOT serif.
-    // Body = sans for readability.
-    final textTheme = GoogleFonts.ibmPlexSansTextTheme(base.textTheme)
+    final textTheme = GoogleFonts.interTextTheme(base.textTheme)
         .apply(
           bodyColor: AppEditorial.ink,
           displayColor: AppEditorial.ink,
         )
         .copyWith(
-          // Display — giant pump-LCD style numbers
-          displayLarge: AppEditorial.mono(
-            fontSize: 56,
-            fontWeight: FontWeight.w500,
-            letterSpacing: -1.5,
-            height: 1.0,
-          ),
-          displayMedium: AppEditorial.mono(
-            fontSize: 44,
-            fontWeight: FontWeight.w500,
-            letterSpacing: -1.0,
-            height: 1.0,
-          ),
-          displaySmall: AppEditorial.mono(
-            fontSize: 34,
-            fontWeight: FontWeight.w500,
-            letterSpacing: -0.6,
-            height: 1.05,
-          ),
-
-          // Headlines — chunky mono titles
-          headlineLarge: AppEditorial.mono(
-            fontSize: 26,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.4,
-            height: 1.15,
-          ),
-          headlineMedium: AppEditorial.mono(
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.2,
-            height: 1.2,
-          ),
-          headlineSmall: AppEditorial.mono(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0,
-            height: 1.25,
-          ),
-          titleLarge: AppEditorial.mono(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0,
-          ),
-          titleMedium: AppEditorial.mono(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.2,
-          ),
-          titleSmall: AppEditorial.mono(
-            fontSize: 11.5,
+          displayLarge: AppEditorial.heading(
+            fontSize: 52,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.3,
+            letterSpacing: -1.8,
+            height: 1.0,
           ),
-
-          // Body — sans for prose
-          bodyLarge: GoogleFonts.ibmPlexSans(
+          displayMedium: AppEditorial.heading(
+            fontSize: 40,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -1.4,
+            height: 1.02,
+          ),
+          displaySmall: AppEditorial.heading(
+            fontSize: 30,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.9,
+            height: 1.08,
+          ),
+          headlineLarge: AppEditorial.heading(
+            fontSize: 25,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.6,
+            height: 1.18,
+          ),
+          headlineMedium: AppEditorial.heading(
+            fontSize: 21,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.4,
+            height: 1.22,
+          ),
+          headlineSmall: AppEditorial.heading(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+            height: 1.3,
+          ),
+          titleLarge: AppEditorial.heading(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+          titleMedium: AppEditorial.heading(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.1,
+          ),
+          titleSmall: AppEditorial.heading(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+          ),
+          bodyLarge: GoogleFonts.inter(
             fontSize: 15,
             fontWeight: FontWeight.w400,
             height: 1.5,
             color: AppEditorial.ink,
           ),
-          bodyMedium: GoogleFonts.ibmPlexSans(
-            fontSize: 13,
+          bodyMedium: GoogleFonts.inter(
+            fontSize: 13.5,
             fontWeight: FontWeight.w400,
-            height: 1.45,
+            height: 1.5,
             color: AppEditorial.ink,
           ),
-          bodySmall: GoogleFonts.ibmPlexSans(
-            fontSize: 11.5,
+          bodySmall: GoogleFonts.inter(
+            fontSize: 12,
             fontWeight: FontWeight.w400,
-            height: 1.4,
+            height: 1.45,
             color: AppEditorial.inkSoft,
           ),
-
-          // Labels — mono uppercase eyebrow style
-          labelLarge: AppEditorial.mono(
-            fontSize: 12,
+          labelLarge: AppEditorial.heading(
+            fontSize: 13,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
           ),
-          labelMedium: AppEditorial.mono(
+          labelMedium: GoogleFonts.inter(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: AppEditorial.inkSoft,
+          ),
+          labelSmall: GoogleFonts.inter(
             fontSize: 10.5,
             fontWeight: FontWeight.w600,
             color: AppEditorial.inkSoft,
-            letterSpacing: 0.4,
-          ),
-          labelSmall: AppEditorial.mono(
-            fontSize: 9.5,
-            fontWeight: FontWeight.w600,
-            color: AppEditorial.inkSoft,
-            letterSpacing: 0.6,
+            letterSpacing: 0.3,
           ),
         );
 
     return base.copyWith(
       textTheme: textTheme,
       appBarTheme: base.appBarTheme.copyWith(
-        titleTextStyle: AppEditorial.mono(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0,
+        titleTextStyle: AppEditorial.heading(
+          fontSize: 19,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
         ),
       ),
     );
@@ -436,13 +467,13 @@ class AppTheme {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EDITORIAL PRIMITIVES — kept minimal, all mono
+// PRIMITIVES
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// `[LABEL]` mono uppercase. The most-used section marker.
+/// Label kecil uppercase. Bersih, tanpa kurung.
 class EditorialEyebrow extends StatelessWidget {
   const EditorialEyebrow(this.label,
-      {super.key, this.color, this.fontSize = 10.5, this.bracket = true});
+      {super.key, this.color, this.fontSize = 11, this.bracket = true});
 
   final String label;
   final Color? color;
@@ -451,17 +482,14 @@ class EditorialEyebrow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = bracket
-        ? '[ ${label.toUpperCase()} ]'
-        : label.toUpperCase();
     return Text(
-      text,
+      label.toUpperCase(),
       style: AppEditorial.eyebrow(fontSize: fontSize, color: color),
     );
   }
 }
 
-/// Hairline horizontal rule.
+/// Garis pemisah tipis.
 class EditorialDivider extends StatelessWidget {
   const EditorialDivider({super.key, this.thickness = 1, this.color});
   final double thickness;
@@ -471,21 +499,22 @@ class EditorialDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: thickness,
-      color: color ?? AppEditorial.hairline,
+      color: color ?? AppEditorial.hairlineSoft,
     );
   }
 }
 
-/// Soft cream card with hairline border.
+/// Kartu putih dengan sudut membulat & bayangan halus.
 class EditorialCard extends StatelessWidget {
   const EditorialCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(16),
+    this.padding = const EdgeInsets.all(20),
     this.background,
     this.borderColor,
     this.radius = AppEditorial.rCard,
     this.onTap,
+    this.shadow = true,
   });
 
   final Widget child;
@@ -494,6 +523,7 @@ class EditorialCard extends StatelessWidget {
   final Color? borderColor;
   final double radius;
   final VoidCallback? onTap;
+  final bool shadow;
 
   @override
   Widget build(BuildContext context) {
@@ -501,26 +531,28 @@ class EditorialCard extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: background ?? AppEditorial.cream,
-        border: Border.all(
-          color: borderColor ?? AppEditorial.hairlineSoft,
-          width: 1,
-        ),
+        border: borderColor != null
+            ? Border.all(color: borderColor!, width: 1)
+            : null,
         borderRadius: BorderRadius.circular(radius),
+        boxShadow: shadow ? AppEditorial.softShadow : null,
       ),
       child: child,
     );
     if (onTap == null) return box;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(radius),
-      child: box,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(radius),
+        child: box,
+      ),
     );
   }
 }
 
-/// Section header: `TITLE  ················` style.
-/// Bold mono label + dotted leader to the right.
-/// `index` parameter is kept for backward compat but no longer rendered.
+/// Header bagian: judul tebal + opsional trailing (mis. "Lihat semua").
+/// `index` dipertahankan agar call-site lama tetap kompilasi.
 class EditorialSectionHeader extends StatelessWidget {
   const EditorialSectionHeader({
     super.key,
@@ -529,7 +561,6 @@ class EditorialSectionHeader extends StatelessWidget {
     this.trailing,
   });
 
-  /// Deprecated, retained only so existing call sites compile.
   final String? index;
   final String label;
   final Widget? trailing;
@@ -539,19 +570,14 @@ class EditorialSectionHeader extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          label.toUpperCase(),
-          style: AppEditorial.mono(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-          ),
-        ),
-        const SizedBox(width: 12),
         Expanded(
-          child: CustomPaint(
-            painter: _DottedLinePainter(color: AppEditorial.hairline),
-            child: const SizedBox(height: 1),
+          child: Text(
+            _titleCase(label),
+            style: AppEditorial.heading(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.4,
+            ),
           ),
         ),
         if (trailing != null) ...[
@@ -561,10 +587,50 @@ class EditorialSectionHeader extends StatelessWidget {
       ],
     );
   }
+
+  static String _titleCase(String input) {
+    return input
+        .toLowerCase()
+        .split(' ')
+        .map((w) => w.isEmpty
+            ? w
+            : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+  }
 }
 
-/// Key-value row with dotted leader, like a service log.
-/// `Total ........... Rp 50.000`
+/// Tautan "Lihat semua" gaya banking — pill lembut.
+class EditorialSeeAll extends StatelessWidget {
+  const EditorialSeeAll({super.key, required this.onTap, this.label = 'Lihat semua'});
+  final VoidCallback? onTap;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: AppEditorial.sans(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppEditorial.brandDeep,
+            ),
+          ),
+          const SizedBox(width: 2),
+          const Icon(PhosphorIconsRegular.caretRight,
+              size: 18, color: AppEditorial.brandDeep),
+        ],
+      ),
+    );
+  }
+}
+
+/// Baris key-value bersih: label kiri, value kanan.
 class EditorialDataRow extends StatelessWidget {
   const EditorialDataRow({
     super.key,
@@ -586,49 +652,34 @@ class EditorialDataRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: dense ? 8 : 12),
+      padding: EdgeInsets.symmetric(vertical: dense ? 9 : 13),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: isLast
-                ? Colors.transparent
-                : (dotted ? Colors.transparent : AppEditorial.hairline),
+            color: isLast ? Colors.transparent : AppEditorial.hairlineSoft,
             width: 1,
           ),
         ),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            label,
-            style: AppEditorial.sans(
-              fontSize: 13,
-              color: AppEditorial.inkSoft,
-            ),
-          ),
-          if (dotted) ...[
-            const SizedBox(width: 8),
-            Expanded(
-              child: CustomPaint(
-                painter: _DottedLinePainter(
-                  color: AppEditorial.hairline,
-                  dotSpacing: 4,
-                  dotSize: 1,
-                ),
-                child: const SizedBox(height: 1),
+          Expanded(
+            child: Text(
+              label,
+              style: AppEditorial.sans(
+                fontSize: 13.5,
+                color: AppEditorial.inkSoft,
               ),
             ),
-            const SizedBox(width: 8),
-          ] else
-            const Spacer(),
+          ),
+          const SizedBox(width: 12),
           Text(
             value,
             style: valueStyle ??
                 AppEditorial.mono(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
                   color: AppEditorial.ink,
                   tabular: true,
                 ),
@@ -639,8 +690,7 @@ class EditorialDataRow extends StatelessWidget {
   }
 }
 
-/// Big readout — for hero numbers like a pump display.
-/// Renders as: `Rp50.000` with prefix small + value huge mono.
+/// Angka besar — untuk nominal hero.
 class EditorialReadout extends StatelessWidget {
   const EditorialReadout({
     super.key,
@@ -665,27 +715,27 @@ class EditorialReadout extends StatelessWidget {
           if (prefix != null)
             TextSpan(
               text: prefix,
-              style: AppEditorial.mono(
-                fontSize: fontSize * 0.42,
-                fontWeight: FontWeight.w500,
+              style: AppEditorial.heading(
+                fontSize: fontSize * 0.44,
+                fontWeight: FontWeight.w600,
                 color: color ?? AppEditorial.inkSoft,
               ),
             ),
           TextSpan(
             text: value,
-            style: AppEditorial.mono(
+            style: AppEditorial.heading(
               fontSize: fontSize,
-              fontWeight: FontWeight.w500,
-              letterSpacing: -fontSize * 0.022,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -fontSize * 0.03,
               color: color,
             ),
           ),
           if (suffix != null)
             TextSpan(
               text: suffix,
-              style: AppEditorial.mono(
+              style: AppEditorial.heading(
                 fontSize: fontSize * 0.36,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
                 color: color ?? AppEditorial.inkSoft,
               ),
             ),
@@ -696,36 +746,129 @@ class EditorialReadout extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Painters
+// AnimatedCount — angka yang "menghitung naik" (count-up) saat muncul/berubah.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _DottedLinePainter extends CustomPainter {
-  _DottedLinePainter({
-    required this.color,
-    this.dotSpacing = 3,
-    this.dotSize = 1,
+/// Menampilkan angka dengan animasi count-up. Saat pertama tampil ia menghitung
+/// dari 0; saat nilainya berubah ia menghitung mulus dari nilai sebelumnya.
+///
+/// `formatter` mengubah nilai numerik menjadi string siap-tampil
+/// (mis. `(v) => 'Rp ${rupiah.format(v).trim()}'`).
+class AnimatedCount extends StatelessWidget {
+  const AnimatedCount({
+    super.key,
+    required this.value,
+    required this.formatter,
+    required this.style,
+    this.duration = const Duration(milliseconds: 900),
+    this.curve = Curves.easeOutCubic,
+    this.textAlign,
+    this.maxLines,
+    this.overflow,
   });
 
-  final Color color;
-  final double dotSpacing;
-  final double dotSize;
+  final double value;
+  final String Function(double) formatter;
+  final TextStyle style;
+  final Duration duration;
+  final Curve curve;
+  final TextAlign? textAlign;
+  final int? maxLines;
+  final TextOverflow? overflow;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = dotSize
-      ..strokeCap = StrokeCap.round;
-    var x = 0.0;
-    while (x < size.width) {
-      canvas.drawCircle(Offset(x, size.height / 2), dotSize / 2, paint);
-      x += dotSpacing;
-    }
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      // TweenAnimationBuilder otomatis menganimasikan dari nilai berjalan ke
+      // `end` baru tiap rebuild — `begin` hanya dipakai pada frame pertama.
+      tween: Tween<double>(begin: 0, end: value),
+      duration: duration,
+      curve: curve,
+      builder: (context, v, _) => Text(
+        formatter(v),
+        style: style,
+        textAlign: textAlign,
+        maxLines: maxLines,
+        overflow: overflow,
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Skeleton — placeholder loading dengan animasi "pulse" halus (tanpa gradient).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Kotak placeholder yang berdenyut lembut saat data masih dimuat.
+/// Warnanya beranimasi antara dua tone netral (atau bisa di-override untuk
+/// area di atas panel kuning lewat [baseColor]).
+class Skeleton extends StatefulWidget {
+  const Skeleton({
+    super.key,
+    this.width,
+    this.height = 14,
+    this.radius = AppEditorial.rTiny,
+    this.baseColor,
+    this.shape = BoxShape.rectangle,
+  });
+
+  final double? width;
+  final double height;
+  final double radius;
+  final Color? baseColor;
+  final BoxShape shape;
+
+  /// Bulat penuh (lingkaran), mis. untuk avatar.
+  const Skeleton.circle({super.key, required double size, Color? color})
+      : width = size,
+        height = size,
+        radius = 0,
+        baseColor = color,
+        shape = BoxShape.circle;
+
+  @override
+  State<Skeleton> createState() => _SkeletonState();
+}
+
+class _SkeletonState extends State<Skeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
   }
 
   @override
-  bool shouldRepaint(_DottedLinePainter old) =>
-      old.color != color ||
-      old.dotSpacing != dotSpacing ||
-      old.dotSize != dotSize;
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = widget.baseColor ?? AppEditorial.hairline;
+    final hi = Color.lerp(base, AppEditorial.canvasSoft, 0.6)!;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) {
+        final color = Color.lerp(base, hi, _c.value)!;
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            color: color,
+            shape: widget.shape,
+            borderRadius: widget.shape == BoxShape.circle
+                ? null
+                : BorderRadius.circular(widget.radius),
+          ),
+        );
+      },
+    );
+  }
 }

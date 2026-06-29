@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:postgrest/postgrest.dart';
 
@@ -164,8 +165,8 @@ class _CompleteVehicleDataPageState
   Widget build(BuildContext context) {
     final isMobil = _type == VehicleType.mobil;
     final progressLabel = widget.remainingCount > 1
-        ? 'LENGKAPI DATA · 1 dari ${widget.remainingCount}'
-        : 'LENGKAPI DATA KENDARAAN';
+        ? 'Kendaraan 1 dari ${widget.remainingCount}'
+        : 'Lengkapi data';
 
     return PopScope(
       canPop: false,
@@ -174,12 +175,10 @@ class _CompleteVehicleDataPageState
         appBar: AppBar(
           automaticallyImplyLeading: false,
           title: Text(
-            'WAJIB',
-            style: AppEditorial.mono(
-              fontSize: 12,
+            'Lengkapi data kendaraan',
+            style: AppEditorial.heading(
+              fontSize: 17,
               fontWeight: FontWeight.w700,
-              color: AppEditorial.rust,
-              letterSpacing: 0.6,
             ),
           ),
         ),
@@ -187,21 +186,33 @@ class _CompleteVehicleDataPageState
           child: ListView(
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
             children: [
-              Text(
-                progressLabel,
-                style: AppEditorial.mono(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppEditorial.butterDeep,
-                  letterSpacing: 0.6,
-                ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppEditorial.brandTint,
+                      borderRadius:
+                          BorderRadius.circular(AppEditorial.rPill),
+                    ),
+                    child: Text(
+                      progressLabel,
+                      style: AppEditorial.sans(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppEditorial.brandDeep,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               Text(
                 'Lengkapi data ${widget.vehicle.name}.',
-                style: AppEditorial.mono(
+                style: AppEditorial.heading(
                   fontSize: 26,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: -0.5,
                   height: 1.15,
                 ),
@@ -212,25 +223,23 @@ class _CompleteVehicleDataPageState
                 'Lengkapi field di bawah supaya prediksi konsumsi bensin '
                 'akurat sejak hari ini.',
                 style: AppEditorial.sans(
-                  fontSize: 13,
+                  fontSize: 14,
                   color: AppEditorial.inkSoft,
                   height: 1.5,
                 ),
               ),
               const SizedBox(height: 24),
-              Container(height: 1, color: AppEditorial.ink),
-              const SizedBox(height: 24),
 
               TextField(
                 controller: _nameCtrl,
                 textCapitalization: TextCapitalization.words,
-                style: AppEditorial.mono(
+                style: AppEditorial.sans(
                     fontSize: 16, fontWeight: FontWeight.w600),
                 decoration: const InputDecoration(
-                  labelText: 'NAMA KENDARAAN',
+                  labelText: 'Nama kendaraan',
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               TextField(
                 controller: _capacityCtrl,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -242,12 +251,12 @@ class _CompleteVehicleDataPageState
                 style: AppEditorial.mono(
                     fontSize: 16, fontWeight: FontWeight.w600),
                 decoration: const InputDecoration(
-                  labelText: 'KAPASITAS TANKI',
+                  labelText: 'Kapasitas tanki',
                   hintText: '5 atau 40',
                   suffixText: 'L',
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
@@ -260,7 +269,7 @@ class _CompleteVehicleDataPageState
                       style: AppEditorial.mono(
                           fontSize: 16, fontWeight: FontWeight.w600),
                       decoration: const InputDecoration(
-                        labelText: 'CC MESIN',
+                        labelText: 'CC mesin',
                         hintText: '125',
                         suffixText: 'cc',
                       ),
@@ -277,37 +286,47 @@ class _CompleteVehicleDataPageState
                       style: AppEditorial.mono(
                           fontSize: 16, fontWeight: FontWeight.w600),
                       decoration: const InputDecoration(
-                        labelText: 'TAHUN',
+                        labelText: 'Tahun',
                         hintText: '2020',
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               TextField(
                 controller: _makeModelCtrl,
                 textCapitalization: TextCapitalization.words,
-                style: AppEditorial.mono(
+                style: AppEditorial.sans(
                     fontSize: 16, fontWeight: FontWeight.w600),
                 decoration: const InputDecoration(
-                  labelText: 'MERK / MODEL · OPSIONAL',
+                  labelText: 'Merk / model · opsional',
                 ),
               ),
               if (isMobil) ...[
                 const SizedBox(height: 22),
-                Text('TIPE BODI', style: AppEditorial.eyebrow()),
-                const SizedBox(height: 8),
+                Text('Tipe bodi',
+                    style: AppEditorial.heading(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    )),
+                const SizedBox(height: 10),
                 _Pills<BodyType>(
                   value: _bodyType,
                   options: BodyType.values,
-                  labelOf: (v) => v.label.toUpperCase(),
+                  labelOf: (v) => v.label,
                   onChange: (v) => setState(() => _bodyType = v),
                 ),
               ],
               const SizedBox(height: 22),
-              Text('TRANSMISI', style: AppEditorial.eyebrow()),
-              const SizedBox(height: 8),
+              Text('Transmisi',
+                  style: AppEditorial.heading(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  )),
+              const SizedBox(height: 10),
               _Pills<Transmission>(
                 value: _transmission,
                 options: Transmission.values,
@@ -316,23 +335,7 @@ class _CompleteVehicleDataPageState
               ),
               if (_error != null) ...[
                 const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    border:
-                        Border.all(color: AppEditorial.rust, width: 1),
-                    borderRadius:
-                        BorderRadius.circular(AppEditorial.rTiny),
-                  ),
-                  child: Text(
-                    _error!,
-                    style: AppEditorial.sans(
-                      fontSize: 12.5,
-                      color: AppEditorial.rust,
-                    ),
-                  ),
-                ),
+                _ErrorNote(_error!),
               ],
               const SizedBox(height: 28),
               FilledButton(
@@ -346,7 +349,7 @@ class _CompleteVehicleDataPageState
                           color: AppEditorial.canvas,
                         ),
                       )
-                    : const Text('SIMPAN & LANJUT →'),
+                    : const Text('Simpan & lanjut'),
               ),
             ],
           ),
@@ -380,29 +383,61 @@ class _Pills<T> extends StatelessWidget {
           onTap: () => onChange(selected ? null : opt),
           child: Container(
             padding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 8),
+                horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
               color:
-                  selected ? AppEditorial.ink : AppEditorial.canvas,
-              border: Border.all(color: AppEditorial.ink, width: 1),
+                  selected ? AppEditorial.brand : AppEditorial.canvasSoft,
               borderRadius:
-                  BorderRadius.circular(AppEditorial.rTiny),
+                  BorderRadius.circular(AppEditorial.rPill),
             ),
             child: Text(
               labelOf(opt),
-              style: AppEditorial.mono(
-                fontSize: 12,
+              style: AppEditorial.sans(
+                fontSize: 13,
                 fontWeight:
-                    selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected
-                    ? AppEditorial.canvas
-                    : AppEditorial.ink,
-                letterSpacing: 0.4,
+                    selected ? FontWeight.w700 : FontWeight.w600,
+                color: AppEditorial.ink,
               ),
             ),
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+/// Catatan error lembut — fill rustSoft, tanpa border keras.
+class _ErrorNote extends StatelessWidget {
+  const _ErrorNote(this.message);
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppEditorial.rustSoft,
+        borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(PhosphorIconsRegular.warningCircle,
+              size: 18, color: AppEditorial.rust),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: AppEditorial.sans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppEditorial.rust,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

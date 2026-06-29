@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme.dart';
+import 'sign_in_page.dart';
 
 class EmailVerifyPage extends StatefulWidget {
   const EmailVerifyPage({super.key, required this.email});
@@ -136,95 +138,119 @@ class _EmailVerifyPageState extends State<EmailVerifyPage> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+              padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      Text('STEP 03 · VERIFIKASI',
-                          style: AppEditorial.mono(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppEditorial.butterDeep,
-                            letterSpacing: 0.6,
-                          )),
-                    ],
-                  ),
-                  const SizedBox(height: 60),
-                  Text(
-                    'Cek inbox.',
-                    style: AppEditorial.mono(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.5,
+                  const AuthBrandMark(),
+                  const SizedBox(height: 40),
+
+                  // Mail icon in rounded brandTint box
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: AppEditorial.brandTint,
+                      borderRadius:
+                          BorderRadius.circular(AppEditorial.rCard),
+                    ),
+                    child: const Icon(
+                      PhosphorIconsRegular.envelopeSimple,
+                      color: AppEditorial.brandDeep,
+                      size: 30,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 20),
+
                   Text(
-                    'Masukkan kode 6 digit yang dikirim ke:',
-                    style: AppEditorial.sans(
-                      fontSize: 13,
-                      color: AppEditorial.inkSoft,
+                    'Cek inbox',
+                    style: AppEditorial.heading(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
+                    'Masukkan kode 6 digit yang dikirim ke:',
+                    style: AppEditorial.sans(
+                      fontSize: 13.5,
+                      color: AppEditorial.inkSoft,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
                     widget.email,
-                    style: AppEditorial.mono(
-                      fontSize: 13,
+                    style: AppEditorial.sans(
+                      fontSize: 13.5,
                       fontWeight: FontWeight.w700,
-                      color: AppEditorial.butterDeep,
+                      color: AppEditorial.brandDeep,
                     ),
                   ),
-                  const SizedBox(height: 28),
-                  Container(height: 1, color: AppEditorial.ink),
-                  const SizedBox(height: 28),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: List.generate(6, (i) {
-                      return _OtpBox(
-                        controller: _controllers[i],
-                        focusNode: _focusNodes[i],
-                        onChanged: (v) => _onDigitChanged(i, v),
-                        onKey: (e) => _onKeyEvent(i, e),
-                        autoFocus: i == 0,
-                        allowPaste: i == 0,
-                      );
-                    }),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    _ErrorBox(message: _error!),
-                  ],
-                  if (_resendMsg != null) ...[
-                    const SizedBox(height: 10),
-                    Center(
-                      child: Text(
-                        _resendMsg!,
-                        style: AppEditorial.sans(
-                          fontSize: 12.5,
-                          color: _resendMsg!.startsWith('Gagal')
-                              ? AppEditorial.rust
-                              : AppEditorial.sage,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _verifying ? null : _verifyOtp,
-                    child: _verifying
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppEditorial.canvas,
+
+                  // OTP card
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppEditorial.cream,
+                      borderRadius:
+                          BorderRadius.circular(AppEditorial.rCard),
+                      boxShadow: AppEditorial.softShadow,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment.spaceBetween,
+                          children: List.generate(6, (i) {
+                            return _OtpBox(
+                              controller: _controllers[i],
+                              focusNode: _focusNodes[i],
+                              onChanged: (v) => _onDigitChanged(i, v),
+                              onKey: (e) => _onKeyEvent(i, e),
+                              autoFocus: i == 0,
+                              allowPaste: i == 0,
+                            );
+                          }),
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 18),
+                          _ErrorBox(message: _error!),
+                        ],
+                        if (_resendMsg != null) ...[
+                          const SizedBox(height: 12),
+                          Center(
+                            child: Text(
+                              _resendMsg!,
+                              style: AppEditorial.sans(
+                                fontSize: 12.5,
+                                color: _resendMsg!.startsWith('Gagal')
+                                    ? AppEditorial.rust
+                                    : AppEditorial.sage,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          )
-                        : const Text('VERIFIKASI →'),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        FilledButton(
+                          onPressed: _verifying ? null : _verifyOtp,
+                          child: _verifying
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFFFFFFFF),
+                                  ),
+                                )
+                              : const Text('Verifikasi'),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Center(
@@ -232,13 +258,13 @@ class _EmailVerifyPageState extends State<EmailVerifyPage> {
                       onPressed: _resending ? null : _resendCode,
                       icon: _resending
                           ? const SizedBox(
-                              height: 12,
-                              width: 12,
+                              height: 14,
+                              width: 14,
                               child: CircularProgressIndicator(
                                   strokeWidth: 2),
                             )
-                          : const Icon(Icons.refresh_rounded, size: 14),
-                      label: const Text('KIRIM ULANG KODE'),
+                          : const Icon(PhosphorIconsRegular.arrowClockwise, size: 16),
+                      label: const Text('Kirim ulang kode'),
                     ),
                   ),
                   Center(
@@ -246,8 +272,8 @@ class _EmailVerifyPageState extends State<EmailVerifyPage> {
                       onPressed: () => Navigator.of(context)
                           .popUntil((r) => r.isFirst),
                       icon:
-                          const Icon(Icons.arrow_back_rounded, size: 14),
-                      label: const Text('KEMBALI KE LOGIN'),
+                          const Icon(PhosphorIconsRegular.arrowLeft, size: 16),
+                      label: const Text('Kembali ke masuk'),
                     ),
                   ),
                 ],
@@ -280,8 +306,8 @@ class _OtpBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 44,
-      height: 56,
+      width: 46,
+      height: 58,
       child: KeyboardListener(
         focusNode: FocusNode(),
         onKeyEvent: onKey,
@@ -297,19 +323,25 @@ class _OtpBox extends StatelessWidget {
             fontSize: 22,
             fontWeight: FontWeight.w700,
           ),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             counterText: '',
             isDense: true,
-            border: UnderlineInputBorder(
-              borderSide: BorderSide(color: AppEditorial.hairline, width: 1),
-            ),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: AppEditorial.hairline, width: 1),
-            ),
-            focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: AppEditorial.ink, width: 2),
-            ),
+            filled: true,
+            fillColor: AppEditorial.canvasSoft,
             contentPadding: EdgeInsets.zero,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppEditorial.rButton),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppEditorial.rButton),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppEditorial.rButton),
+              borderSide:
+                  const BorderSide(color: AppEditorial.ink, width: 1.6),
+            ),
           ),
           onChanged: onChanged,
         ),
@@ -325,23 +357,25 @@ class _ErrorBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: AppEditorial.rust, width: 1),
+        color: AppEditorial.rustSoft,
         borderRadius: BorderRadius.circular(AppEditorial.rTiny),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppEditorial.rust, size: 16),
-          const SizedBox(width: 8),
+          const Icon(PhosphorIconsRegular.warningCircle,
+              color: AppEditorial.rust, size: 18),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
               style: AppEditorial.sans(
                 fontSize: 12.5,
+                fontWeight: FontWeight.w500,
                 color: AppEditorial.rust,
+                height: 1.4,
               ),
             ),
           ),

@@ -1,13 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../services/refuel_parser_service.dart';
 
-/// Receipt scan — looks like a scanning console.
+/// Receipt scan — reads the struk with AI vision.
 class ReceiptProcessingSheet extends StatefulWidget {
   const ReceiptProcessingSheet({super.key, required this.image});
 
@@ -61,89 +62,115 @@ class _ReceiptProcessingSheetState extends State<ReceiptProcessingSheet> {
   Widget build(BuildContext context) {
     final screenH = MediaQuery.of(context).size.height;
 
+    final Color statusColor = _processing
+        ? AppEditorial.brandDeep
+        : (_error != null ? AppEditorial.rust : AppEditorial.sage);
+    final String statusLabel = _processing
+        ? 'Memproses'
+        : (_error != null ? 'Gagal' : 'Selesai');
+
     return Container(
       height: screenH * 0.7,
       decoration: const BoxDecoration(
         color: AppEditorial.canvas,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        border: Border(
-          top: BorderSide(color: AppEditorial.ink, width: 1),
-          left: BorderSide(color: AppEditorial.ink, width: 1),
-          right: BorderSide(color: AppEditorial.ink, width: 1),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
           children: [
             Center(
               child: Container(
-                width: 36,
-                height: 3,
-                color: AppEditorial.hairline,
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppEditorial.hairline,
+                  borderRadius: BorderRadius.circular(AppEditorial.rPill),
+                ),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 18),
             Row(
               children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Scan struk',
+                        style: AppEditorial.heading(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _processing
+                            ? 'AI sedang membaca strukmu…'
+                            : (_error != null
+                                ? 'Gagal memindai struk.'
+                                : 'Struk berhasil dibaca.'),
+                        style: AppEditorial.sans(
+                          fontSize: 13,
+                          color: AppEditorial.inkSoft,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Container(
-                  width: 8,
-                  height: 8,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
-                    color: _processing
-                        ? AppEditorial.butterDeep
-                        : (_error != null
-                            ? AppEditorial.rust
-                            : AppEditorial.sage),
-                    shape: BoxShape.circle,
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius:
+                        BorderRadius.circular(AppEditorial.rPill),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        statusLabel,
+                        style: AppEditorial.sans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: statusColor,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  _processing
-                      ? 'SCAN · PROCESSING'
-                      : (_error != null ? 'ERROR' : 'OK'),
-                  style: AppEditorial.mono(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
-                  ),
-                ),
-                const Spacer(),
                 if (!_processing)
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    icon: const Icon(Icons.close_rounded,
-                        color: AppEditorial.ink, size: 22),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(PhosphorIconsRegular.x,
+                          color: AppEditorial.inkSoft, size: 22),
+                    ),
                   ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              _processing
-                  ? 'AI baca strukmu, sebentar...'
-                  : (_error != null
-                      ? 'gagal memindai struk.'
-                      : 'siap.'),
-              style: AppEditorial.sans(
-                fontSize: 13,
-                color: AppEditorial.inkSoft,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(height: 1, color: AppEditorial.ink),
             const SizedBox(height: 20),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      border:
-                          Border.all(color: AppEditorial.ink, width: 1.5),
-                    ),
+                  ClipRRect(
+                    borderRadius:
+                        BorderRadius.circular(AppEditorial.rCard),
                     child: Image.file(
                       File(widget.image.path),
                       height: 220,
@@ -153,33 +180,33 @@ class _ReceiptProcessingSheetState extends State<ReceiptProcessingSheet> {
                   const SizedBox(height: 24),
                   if (_processing) ...[
                     const SizedBox(
-                      height: 22,
-                      width: 22,
+                      height: 24,
+                      width: 24,
                       child: CircularProgressIndicator(
                         color: AppEditorial.ink,
-                        strokeWidth: 2,
+                        strokeWidth: 2.4,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Text(
-                      'mengirim ke AI vision...',
-                      style: AppEditorial.mono(
-                        fontSize: 11,
+                      'Mengirim ke AI vision…',
+                      style: AppEditorial.sans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         color: AppEditorial.inkSoft,
                       ),
                     ),
                   ] else if (_error != null) ...[
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        border: Border.all(
-                            color: AppEditorial.rust, width: 1),
+                        color: AppEditorial.rustSoft,
                         borderRadius:
                             BorderRadius.circular(AppEditorial.rTiny),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.error_outline_rounded,
+                          const Icon(PhosphorIconsRegular.warningCircle,
                               color: AppEditorial.rust, size: 18),
                           const SizedBox(width: 10),
                           Expanded(
@@ -187,6 +214,7 @@ class _ReceiptProcessingSheetState extends State<ReceiptProcessingSheet> {
                               _error!,
                               style: AppEditorial.sans(
                                 fontSize: 13,
+                                fontWeight: FontWeight.w600,
                                 color: AppEditorial.rust,
                               ),
                             ),
@@ -205,14 +233,14 @@ class _ReceiptProcessingSheetState extends State<ReceiptProcessingSheet> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('TUTUP'),
+                      child: const Text('Tutup'),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton(
                       onPressed: _start,
-                      child: const Text('COBA LAGI ↺'),
+                      child: const Text('Coba lagi'),
                     ),
                   ),
                 ],

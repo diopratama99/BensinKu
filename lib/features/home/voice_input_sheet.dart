@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -9,7 +10,7 @@ import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../services/refuel_parser_service.dart';
 
-/// Voice input — looks like a recording console.
+/// Voice input — dictate a refuel and let AI parse it.
 class VoiceInputSheet extends StatefulWidget {
   const VoiceInputSheet({super.key});
 
@@ -164,71 +165,90 @@ class _VoiceInputSheetState extends State<VoiceInputSheet> {
       height: screenH * 0.62,
       decoration: const BoxDecoration(
         color: AppEditorial.canvas,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        border: Border(
-          top: BorderSide(color: AppEditorial.ink, width: 1),
-          left: BorderSide(color: AppEditorial.ink, width: 1),
-          right: BorderSide(color: AppEditorial.ink, width: 1),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
           children: [
             Center(
               child: Container(
-                width: 36,
-                height: 3,
-                color: AppEditorial.hairline,
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppEditorial.hairline,
+                  borderRadius: BorderRadius.circular(AppEditorial.rPill),
+                ),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 18),
             Row(
               children: [
-                // Recording status indicator
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: _listening
-                        ? AppEditorial.rust
-                        : AppEditorial.inkMuted,
-                    shape: BoxShape.circle,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Input suara',
+                        style: AppEditorial.heading(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Contoh: "isi pertamax 50 ribu di motor"',
+                        style: AppEditorial.sans(
+                          fontSize: 13,
+                          color: AppEditorial.inkSoft,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  _listening ? 'REC · MENDENGAR' : 'VOICE INPUT',
-                  style: AppEditorial.mono(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _listening
-                        ? AppEditorial.rust
-                        : AppEditorial.ink,
-                    letterSpacing: 0.6,
+                const SizedBox(width: 12),
+                if (_listening)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppEditorial.rustSoft,
+                      borderRadius:
+                          BorderRadius.circular(AppEditorial.rPill),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: AppEditorial.rust,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          'Mendengar',
+                          style: AppEditorial.sans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppEditorial.rust,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const Spacer(),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
-                  icon: const Icon(Icons.close_rounded,
-                      color: AppEditorial.ink, size: 22),
+                  icon: const Icon(PhosphorIconsRegular.x,
+                      color: AppEditorial.inkSoft, size: 22),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              'contoh: "isi pertamax 50 ribu di motor"',
-              style: AppEditorial.sans(
-                fontSize: 13,
-                color: AppEditorial.inkSoft,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(height: 1, color: AppEditorial.ink),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Expanded(child: _buildBody()),
             const SizedBox(height: 16),
             _buildMicButton(),
@@ -251,68 +271,89 @@ class _VoiceInputSheetState extends State<VoiceInputSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          _listening ? 'TRANSKRIP (LIVE)' : 'TRANSKRIP',
-          style: AppEditorial.eyebrow(),
-        ),
-        const SizedBox(height: 10),
-        if (_listening)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: AspectRatio(
-              aspectRatio: 1080 / 400,
-              child: Image.asset(
-                'assets/illustrations/voice_wave.png',
-                fit: BoxFit.contain,
-              ),
-            ),
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppEditorial.cream,
+            borderRadius: BorderRadius.circular(AppEditorial.rCard),
+            boxShadow: AppEditorial.softShadow,
           ),
-        Expanded(
-          child: SingleChildScrollView(
-            child: Text(
-              _transcript.isEmpty
-                  ? (_listening
-                      ? 'mulai bicara sekarang...'
-                      : 'tap mic di bawah untuk mulai.')
-                  : _transcript,
-              style: AppEditorial.mono(
-                fontSize: 16,
-                fontWeight: _transcript.isEmpty
-                    ? FontWeight.w400
-                    : FontWeight.w600,
-                color: _transcript.isEmpty
-                    ? AppEditorial.inkMuted
-                    : AppEditorial.ink,
-                height: 1.5,
-              ),
-            ),
-          ),
-        ),
-        if (_error != null) ...[
-          const SizedBox(height: 10),
-          _ErrorBox(message: _error!),
-        ],
-        if (_processing) ...[
-          const SizedBox(height: 10),
-          Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(
-                height: 14,
-                width: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppEditorial.ink,
+              Text(
+                _listening ? 'Transkrip langsung' : 'Transkrip',
+                style: AppEditorial.sans(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppEditorial.inkSoft,
                 ),
               ),
-              const SizedBox(width: 10),
-              Text('AI memproses...',
-                  style: AppEditorial.sans(
-                    fontSize: 13,
-                    color: AppEditorial.inkSoft,
-                  )),
+              if (_listening)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: AspectRatio(
+                    aspectRatio: 1080 / 400,
+                    child: Image.asset(
+                      'assets/illustrations/voice_wave.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 10),
+              Text(
+                _transcript.isEmpty
+                    ? (_listening
+                        ? 'Mulai bicara sekarang…'
+                        : 'Ketuk mic di bawah untuk mulai.')
+                    : _transcript,
+                style: AppEditorial.sans(
+                  fontSize: 16,
+                  fontWeight: _transcript.isEmpty
+                      ? FontWeight.w400
+                      : FontWeight.w600,
+                  color: _transcript.isEmpty
+                      ? AppEditorial.inkMuted
+                      : AppEditorial.ink,
+                  height: 1.5,
+                ),
+              ),
             ],
           ),
-        ],
+        ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_error != null) _ErrorBox(message: _error!),
+                if (_processing) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppEditorial.ink,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text('AI sedang memproses…',
+                          style: AppEditorial.sans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppEditorial.inkSoft,
+                          )),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -325,20 +366,20 @@ class _VoiceInputSheetState extends State<VoiceInputSheet> {
     return GestureDetector(
       onTap: disabled ? null : _toggleListen,
       child: Container(
-        height: 64,
-        width: 64,
+        height: 68,
+        width: 68,
         decoration: BoxDecoration(
           color: disabled
-              ? AppEditorial.cream
+              ? AppEditorial.hairline
               : (_listening ? AppEditorial.rust : AppEditorial.ink),
-          border: Border.all(color: AppEditorial.ink, width: 1.5),
-          borderRadius: BorderRadius.circular(AppEditorial.rButton),
+          shape: BoxShape.circle,
+          boxShadow: disabled ? null : AppEditorial.softShadow,
         ),
         child: Icon(
-          _listening ? Icons.stop_rounded : Icons.mic_rounded,
+          _listening ? PhosphorIconsRegular.stop : PhosphorIconsRegular.microphone,
           color: disabled
               ? AppEditorial.inkMuted
-              : AppEditorial.canvas,
+              : const Color(0xFFFFFFFF),
           size: 28,
         ),
       ),
@@ -353,14 +394,14 @@ class _ErrorBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        border: Border.all(color: AppEditorial.rust, width: 1),
+        color: AppEditorial.rustSoft,
         borderRadius: BorderRadius.circular(AppEditorial.rTiny),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded,
+          const Icon(PhosphorIconsRegular.warningCircle,
               color: AppEditorial.rust, size: 18),
           const SizedBox(width: 10),
           Expanded(
@@ -368,6 +409,7 @@ class _ErrorBox extends StatelessWidget {
               message,
               style: AppEditorial.sans(
                 fontSize: 13,
+                fontWeight: FontWeight.w600,
                 color: AppEditorial.rust,
               ),
             ),

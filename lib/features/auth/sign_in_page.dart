@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme.dart';
+import '../../services/google_auth_service.dart';
 import 'forgot_password_page.dart';
 import 'sign_up_page.dart';
 
@@ -62,6 +64,27 @@ class _SignInPageState extends State<SignInPage> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final res = await GoogleAuthService.signIn();
+      // res == null → user cancelled the picker; stay silent.
+      // On success, _AuthGate reacts to the session change and routes on.
+      if (res == null && mounted) {
+        setState(() => _busy = false);
+      }
+    } on GoogleAuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,34 +94,14 @@ class _SignInPageState extends State<SignInPage> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+              padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Masthead
-                  Row(
-                    children: [
-                      Text('BENSINKU',
-                          style: AppEditorial.mono(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
-                          )),
-                      const SizedBox(width: 10),
-                      Container(
-                        width: 4,
-                        height: 4,
-                        decoration: const BoxDecoration(
-                          color: AppEditorial.butter,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text('VOL.01 · LOGIN',
-                          style: AppEditorial.eyebrow()),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
+                  // Brand lockup
+                  const AuthBrandMark(),
+                  const SizedBox(height: 24),
+
                   // Hero illustration
                   AspectRatio(
                     aspectRatio: 1080 / 720,
@@ -107,12 +110,13 @@ class _SignInPageState extends State<SignInPage> {
                       fit: BoxFit.contain,
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
+
                   Text(
-                    'Masuk ke akun.',
-                    style: AppEditorial.mono(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w600,
+                    'Masuk ke akun',
+                    style: AppEditorial.heading(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: -0.6,
                     ),
                   ),
@@ -120,91 +124,129 @@ class _SignInPageState extends State<SignInPage> {
                   Text(
                     'Catat ulang pengisian, lihat statistik bulan ini.',
                     style: AppEditorial.sans(
-                      fontSize: 13,
+                      fontSize: 13.5,
                       color: AppEditorial.inkSoft,
                       height: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 36),
-                  Container(height: 1, color: AppEditorial.ink),
-                  const SizedBox(height: 28),
-
-                  TextField(
-                    controller: _emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    autofillHints: const [AutofillHints.email],
-                    style:
-                        AppEditorial.mono(fontSize: 15, fontWeight: FontWeight.w500),
-                    decoration: const InputDecoration(
-                      labelText: 'EMAIL',
-                      hintText: 'contoh@email.com',
-                    ),
-                  ),
                   const SizedBox(height: 22),
-                  TextField(
-                    controller: _passCtrl,
-                    obscureText: _obscure,
-                    textInputAction: TextInputAction.done,
-                    autofillHints: const [AutofillHints.password],
-                    style:
-                        AppEditorial.mono(fontSize: 15, fontWeight: FontWeight.w500),
-                    onSubmitted: (_) => _busy ? null : _signIn(),
-                    decoration: InputDecoration(
-                      labelText: 'PASSWORD',
-                      suffixIcon: IconButton(
-                        onPressed: () =>
-                            setState(() => _obscure = !_obscure),
-                        icon: Icon(
-                          _obscure
-                              ? Icons.visibility_off_rounded
-                              : Icons.visibility_rounded,
-                          color: AppEditorial.inkSoft,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const ForgotPasswordPage(),
-                        ),
-                      ),
-                      child: const Text('LUPA PASSWORD?'),
-                    ),
-                  ),
 
-                  if (_error != null) ...[
-                    const SizedBox(height: 6),
-                    _ErrorBox(message: _error!),
-                  ],
-
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _busy ? null : _signIn,
-                    child: _busy
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppEditorial.canvas,
+                  // Form card
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppEditorial.cream,
+                      borderRadius:
+                          BorderRadius.circular(AppEditorial.rCard),
+                      boxShadow: AppEditorial.softShadow,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: _emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
+                          autofillHints: const [AutofillHints.email],
+                          decoration: const InputDecoration(
+                            labelText: 'Email',
+                            hintText: 'contoh@email.com',
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _passCtrl,
+                          obscureText: _obscure,
+                          textInputAction: TextInputAction.done,
+                          autofillHints: const [AutofillHints.password],
+                          onSubmitted: (_) => _busy ? null : _signIn(),
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            suffixIcon: IconButton(
+                              onPressed: () =>
+                                  setState(() => _obscure = !_obscure),
+                              icon: Icon(
+                                _obscure
+                                    ? PhosphorIconsRegular.eyeSlash
+                                    : PhosphorIconsRegular.eye,
+                                color: AppEditorial.inkSoft,
+                                size: 20,
+                              ),
                             ),
-                          )
-                        : const Text('MASUK →'),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const ForgotPasswordPage(),
+                              ),
+                            ),
+                            child: const Text('Lupa password?'),
+                          ),
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 6),
+                          _ErrorBox(message: _error!),
+                        ],
+                        const SizedBox(height: 18),
+                        FilledButton(
+                          onPressed: _busy ? null : _signIn,
+                          child: _busy
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFFFFFFFF),
+                                  ),
+                                )
+                              : const Text('Masuk'),
+                        ),
+
+                        // Google sign-in — only shown when configured.
+                        if (GoogleAuthService.isConfigured) ...[
+                          const SizedBox(height: 18),
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Divider(
+                                    color: AppEditorial.hairline),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12),
+                                child: Text('atau',
+                                    style: AppEditorial.sans(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppEditorial.inkMuted,
+                                    )),
+                              ),
+                              const Expanded(
+                                child: Divider(
+                                    color: AppEditorial.hairline),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          _GoogleButton(
+                            onPressed: _busy ? null : _signInWithGoogle,
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 28),
 
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('belum punya akun? ',
+                      Text('Belum punya akun? ',
                           style: AppEditorial.sans(
-                            fontSize: 13,
+                            fontSize: 13.5,
                             color: AppEditorial.inkSoft,
                           )),
                       GestureDetector(
@@ -214,13 +256,11 @@ class _SignInPageState extends State<SignInPage> {
                           ),
                         ),
                         child: Text(
-                          'daftar.',
-                          style: AppEditorial.mono(
-                            fontSize: 13,
+                          'Daftar',
+                          style: AppEditorial.sans(
+                            fontSize: 13.5,
                             fontWeight: FontWeight.w700,
-                          ).copyWith(
-                            decoration: TextDecoration.underline,
-                            decorationColor: AppEditorial.ink,
+                            color: AppEditorial.brandDeep,
                           ),
                         ),
                       ),
@@ -236,30 +276,113 @@ class _SignInPageState extends State<SignInPage> {
   }
 }
 
-class _ErrorBox extends StatelessWidget {
-  const _ErrorBox({required this.message});
-  final String message;
+/// Wordmark BensinKu — ikon pompa dalam kotak rounded brandTint.
+class AuthBrandMark extends StatelessWidget {
+  const AuthBrandMark({super.key, this.center = false});
+
+  final bool center;
 
   @override
   Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: center ? MainAxisSize.min : MainAxisSize.max,
+      mainAxisAlignment:
+          center ? MainAxisAlignment.center : MainAxisAlignment.start,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppEditorial.brandTint,
+            borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+          ),
+          child: const Icon(
+            PhosphorIconsRegular.gasPump,
+            color: AppEditorial.brandDeep,
+            size: 22,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          'BensinKu',
+          style: AppEditorial.heading(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.4,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GoogleButton extends StatelessWidget {
+  const _GoogleButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        side: const BorderSide(color: AppEditorial.hairline, width: 1.4),
+        padding: const EdgeInsets.symmetric(vertical: 15),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Simple "G" mark — avoids bundling a logo asset.
+          Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppEditorial.canvasSoft,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              'G',
+              style: AppEditorial.heading(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppEditorial.brandDeep,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text('Lanjut dengan Google'),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorBox extends StatelessWidget {
+  const _ErrorBox({required this.message});
+  final String message;
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: AppEditorial.rust, width: 1),
+        color: AppEditorial.rustSoft,
         borderRadius: BorderRadius.circular(AppEditorial.rTiny),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppEditorial.rust, size: 16),
-          const SizedBox(width: 8),
+          const Icon(PhosphorIconsRegular.warningCircle,
+              color: AppEditorial.rust, size: 18),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
               style: AppEditorial.sans(
                 fontSize: 12.5,
+                fontWeight: FontWeight.w500,
                 color: AppEditorial.rust,
+                height: 1.4,
               ),
             ),
           ),

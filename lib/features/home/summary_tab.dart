@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -6,21 +8,33 @@ import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../services/prediction_service.dart';
-import '../../widgets/vehicle_cover.dart';
+import '../../widgets/user_avatar.dart';
+import '../calculator/calculator_page.dart';
+import '../chat/chat_page.dart';
+import 'fuel_detail_page.dart';
+import 'history_tab.dart';
+import 'timeline_page.dart';
 
-/// Beranda — fuel logbook dashboard.
+/// Beranda — dashboard gaya digital-bank.
 ///
-/// Layout:
-///   §01 LAPORAN BULAN INI    — pump-LCD reading + 3-col stat
-///   §02 PENGISIAN TERAKHIR   — single line entry from log
-///   §03 PREDIKSI BENSIN      — gauge + key/value rows
-///   §04 GARASI               — vehicle picker, photo cards
-///   §05 RIWAYAT              — last few entries with dotted leaders
+/// Panel hero kuning (greeting + total pengeluaran + ringkasan) yang
+/// membentang ke atas, kartu quick-action yang mengambang menumpuk hero,
+/// lalu kartu putih: prediksi bensin, pengisian terakhir, dan riwayat.
 class SummaryTab extends StatefulWidget {
-  const SummaryTab({super.key, this.onGoToHistory, this.onGoToProfile});
+  const SummaryTab({
+    super.key,
+    this.onGoToHistory,
+    this.onGoToProfile,
+    this.onAddFuel,
+    this.onGoToAnalytics,
+    this.onGoToMaintenance,
+  });
 
   final VoidCallback? onGoToHistory;
   final VoidCallback? onGoToProfile;
+  final VoidCallback? onAddFuel;
+  final VoidCallback? onGoToAnalytics;
+  final VoidCallback? onGoToMaintenance;
 
   @override
   State<SummaryTab> createState() => _SummaryTabState();
@@ -39,12 +53,43 @@ class _SummaryTabState extends State<SummaryTab> {
 
   final _date = DateFormat('d MMM yyyy', 'id_ID');
 
+  final _scroll = ScrollController();
+  // 0 = kuning & besar (atas), 1 = canvas & kecil (ter-scroll).
+  final ValueNotifier<double> _headerT = ValueNotifier<double>(0);
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    const threshold = 150.0;
+    _headerT.value = (_scroll.offset / threshold).clamp(0.0, 1.0);
+  }
+
+  @override
+  void dispose() {
+    _scroll.removeListener(_onScroll);
+    _scroll.dispose();
+    _headerT.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
     return RefreshIndicator(
-      onRefresh: () async => setState(() {}),
+      edgeOffset: topInset + 74,
+      onRefresh: () async {
+        try {
+          await Supabase.instance.client.auth.getUser();
+        } catch (_) {}
+        UserAvatar.bumpCacheBust();
+        setState(() {});
+      },
       color: AppEditorial.ink,
-      backgroundColor: AppEditorial.canvas,
+      backgroundColor: AppEditorial.cream,
       child: FutureBuilder<List<Vehicle>>(
         future: _repo.listVehicles(),
         builder: (context, vehiclesSnap) {
@@ -52,7 +97,7 @@ class _SummaryTabState extends State<SummaryTab> {
             return _CenteredError(vehiclesSnap.error.toString());
           }
           final vehicles = vehiclesSnap.data;
-          if (vehicles == null) return const _CenteredLoading();
+          if (vehicles == null) return const _SummarySkeleton();
 
           if (vehicles.isEmpty) {
             return const _CenteredEmpty(
@@ -78,10 +123,9 @@ class _SummaryTabState extends State<SummaryTab> {
                 return _CenteredError(snap.error.toString());
               }
               final data = snap.data;
-              if (data == null) return const _CenteredLoading();
 
-              final refuels = data.$1;
-              final monthTrips = data.$2;
+              final refuels = data?.$1 ?? const <Refuel>[];
+              final monthTrips = data?.$2 ?? const <Trip>[];
 
               final now = DateTime.now();
               final monthStart = DateTime(now.year, now.month, 1);
@@ -97,116 +141,213 @@ class _SummaryTabState extends State<SummaryTab> {
                   monthRefuels.fold<num>(0, (sum, r) => sum + r.totalRp);
               final totalLiters =
                   monthRefuels.fold<num>(0, (sum, r) => sum + r.liters);
-
               final tripDistanceKm = monthTrips.fold<double>(
                   0, (sum, t) => sum + (t.distanceKm ?? 0));
 
-              final monthName =
-                  DateFormat('MMMM yyyy', 'id_ID').format(now).toUpperCase();
               final lastRefuel =
                   refuels.isNotEmpty ? refuels.first : null;
-              final recentRefuels = refuels.take(4).toList();
               final selectedVehicle = vehicles.firstWhere(
                 (v) => v.id == _vehicleId,
                 orElse: () => vehicles.first,
               );
 
-              return ListView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 140),
+              final headerH = topInset + 74;
+              return Stack(
                 children: [
-                  // Greeting + vehicle selector
-                  const _GreetingBlock(),
-                  const SizedBox(height: 14),
-                  _VehicleSelector(
-                    vehicle: selectedVehicle,
-                    totalCount: vehicles.length,
-                    onTap: () => _pickVehicle(vehicles),
-                  ),
-                  const SizedBox(height: 24),
+                  ListView(
+                    controller: _scroll,
+                    padding: EdgeInsets.zero,
+                    children: [
+                      // Filler kuning yang membentang jauh ke atas (tinggi
+                      // layout 0, tapi melukis ke atas via OverflowBox). Saat
+                      // refresh ditarik sangat kencang, area di atas hero tetap
+                      // kuning — tak ada garis putih.
+                      SizedBox(
+                        height: 0,
+                        child: OverflowBox(
+                          minHeight: 0,
+                          maxHeight: 2000,
+                          alignment: Alignment.bottomCenter,
+                          child: Container(
+                            height: 2000,
+                            color: AppEditorial.brand,
+                          ),
+                        ),
+                      ),
+                      // ── Hero body (kuning) — saldo + ringkasan ──
+                      // Background kuning dibentangkan sampai ke atas (di balik
+                      // header) lewat padding atas = headerH. Karena ikut
+                      // di-scroll dalam satu widget, seam dgn header tak pernah
+                      // bocor putih walau ditarik kencang saat refresh.
+                      Container(
+                        color: AppEditorial.brand,
+                        padding: EdgeInsets.only(top: headerH),
+                        child: _HeroBody(
+                          totalSpend: totalSpend,
+                          totalLiters: totalLiters,
+                          distanceKm: tripDistanceKm,
+                          refuelCount: monthRefuels.length,
+                          rupiah: _rupiah,
+                          loading: data == null,
+                        ),
+                      ),
 
-                  // §01 — Laporan bulan ini
-                  EditorialSectionHeader(
-                    index: '01',
-                    label: 'LAPORAN $monthName',
-                  ),
-                  const SizedBox(height: 18),
-                  _MonthReadout(
-                    totalSpend: totalSpend,
-                    totalLiters: totalLiters,
-                    distanceKm: tripDistanceKm,
-                    refuelCount: monthRefuels.length,
-                    rupiah: _rupiah,
+                  // ── Strip fade + quick actions (pakai Stack supaya
+                  //    tombol tetap bisa ditekan; Transform.translate
+                  //    memindah area sentuh ke posisi lama → tidak responsif)
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Strip fade: kuning melebur ke background.
+                          Container(
+                            height: 48,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  AppEditorial.brand,
+                                  AppEditorial.canvas
+                                ],
+                              ),
+                            ),
+                          ),
+                          // Ruang agar kartu yang menumpuk tetap di dalam
+                          // batas Stack (penting untuk hit-test).
+                          const SizedBox(height: 80),
+                        ],
+                      ),
+                      Positioned(
+                        left: 20,
+                        right: 20,
+                        bottom: 0,
+                        child: _QuickActions(
+                          onAssistant: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  ChatPage(vehicles: vehicles),
+                            ),
+                          ),
+                          onCalculator: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const CalculatorPage(),
+                            ),
+                          ),
+                          onHistory: _openHistory,
+                          onTimeline: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const TimelinePage(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 28),
 
-                  // §02 — Pengisian terakhir
+                  // Prediksi
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: const EditorialSectionHeader(
+                      label: 'Prediksi bensin',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _FuelPredictionBlock(vehicle: selectedVehicle),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // Pengisian terakhir
                   if (lastRefuel != null) ...[
-                    const EditorialSectionHeader(
-                      index: '02',
-                      label: 'PENGISIAN TERAKHIR',
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: const EditorialSectionHeader(
+                        label: 'Pengisian terakhir',
+                      ),
                     ),
                     const SizedBox(height: 14),
-                    _LastRefuelLine(
-                      refuel: lastRefuel,
-                      rupiah: _rupiah,
-                      date: _date,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _LastRefuelCard(
+                        refuel: lastRefuel,
+                        rupiah: _rupiah,
+                        date: _date,
+                      ),
                     ),
                     const SizedBox(height: 28),
                   ],
 
-                  // §03 — Prediksi
-                  const EditorialSectionHeader(
-                    index: '03',
-                    label: 'PREDIKSI BENSIN',
+                  // Riwayat — tampilan kalender (beda dari tab Riwayat)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: EditorialSectionHeader(
+                      label: 'Riwayat',
+                      trailing:
+                          EditorialSeeAll(onTap: _openHistory),
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  _FuelPredictionBlock(vehicle: selectedVehicle),
-                  const SizedBox(height: 28),
-
-                  // §04 — Riwayat
-                  EditorialSectionHeader(
-                    index: '04',
-                    label: 'RIWAYAT',
-                    trailing: GestureDetector(
-                      onTap: widget.onGoToHistory,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('LIHAT SEMUA',
-                              style: AppEditorial.eyebrow(
-                                  color: AppEditorial.ink)),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.arrow_forward_rounded,
-                              size: 12, color: AppEditorial.ink),
-                        ],
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _HistoryCalendar(
+                      refuels: refuels,
+                    ),
+                  ),
+                  const SizedBox(height: 130),
+                    ],
+                  ),
+                  // Header tetap (pinned) — mengecil & warna ber-transisi.
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _headerT,
+                      builder: (context, t, _) => _GreetingBar(
+                        vehicle: selectedVehicle,
+                        expandedHeight: headerH,
+                        topInset: topInset,
+                        t: t,
+                        onPickVehicle: () => _pickVehicle(vehicles),
+                        onTapProfile: widget.onGoToProfile,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-
-                  if (recentRefuels.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text(
-                        'belum ada catatan pengisian.',
-                        style: AppEditorial.sans(
-                          fontSize: 13,
-                          color: AppEditorial.inkSoft,
-                        ),
-                      ),
-                    )
-                  else
-                    ...recentRefuels.asMap().entries.map((e) => _LogRow(
-                          refuel: e.value,
-                          rupiah: _rupiah,
-                          date: _date,
-                          isLast: e.key == recentRefuels.length - 1,
-                        )),
                 ],
               );
             },
           );
         },
+      ),
+    );
+  }
+
+  void _openHistory() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          backgroundColor: AppEditorial.canvas,
+          appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(PhosphorIconsRegular.arrowLeft),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: Text(
+              'Riwayat',
+              style: AppEditorial.heading(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ),
+          body: const HistoryTab(),
+        ),
       ),
     );
   }
@@ -217,7 +358,7 @@ class _SummaryTabState extends State<SummaryTab> {
       backgroundColor: AppEditorial.canvas,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
       builder: (ctx) => SafeArea(
         top: false,
@@ -229,28 +370,32 @@ class _SummaryTabState extends State<SummaryTab> {
             children: [
               Center(
                 child: Container(
-                  width: 36,
-                  height: 3,
-                  color: AppEditorial.hairline,
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppEditorial.hairline,
+                    borderRadius: BorderRadius.circular(AppEditorial.rPill),
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               Row(
                 children: [
-                  Text('GARASI', style: AppEditorial.eyebrow()),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: CustomPaint(
-                      painter: _DottedLine(),
-                      child: const SizedBox(height: 1),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text('${vehicles.length} UNIT',
-                      style: AppEditorial.eyebrow()),
+                  Text('Pilih kendaraan',
+                      style: AppEditorial.heading(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      )),
+                  const Spacer(),
+                  Text('${vehicles.length} unit',
+                      style: AppEditorial.sans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppEditorial.inkMuted,
+                      )),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               ...vehicles.map((v) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: _VehicleRow(
@@ -271,22 +416,35 @@ class _SummaryTabState extends State<SummaryTab> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Greeting + vehicle selector (top of dashboard)
+// Greeting bar — header TETAP (pinned). Warna ber-transisi saat scroll.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _GreetingBlock extends StatelessWidget {
-  const _GreetingBlock();
+class _GreetingBar extends StatelessWidget {
+  const _GreetingBar({
+    required this.vehicle,
+    required this.expandedHeight,
+    required this.topInset,
+    required this.t,
+    required this.onPickVehicle,
+    this.onTapProfile,
+  });
 
-  String _greetingPrefix(int hour) {
-    if (hour >= 4 && hour < 11) return 'Selamat Pagi';
-    if (hour >= 11 && hour < 15) return 'Selamat Siang';
-    if (hour >= 15 && hour < 18) return 'Selamat Sore';
-    return 'Selamat Malam';
+  final Vehicle vehicle;
+  final double expandedHeight;
+  final double topInset;
+  final double t; // 0 = besar/kuning, 1 = kecil/canvas
+  final VoidCallback onPickVehicle;
+  final VoidCallback? onTapProfile;
+
+  String _greeting(int hour) {
+    if (hour >= 4 && hour < 11) return 'Selamat pagi';
+    if (hour >= 11 && hour < 15) return 'Selamat siang';
+    if (hour >= 15 && hour < 18) return 'Selamat sore';
+    return 'Selamat malam';
   }
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
     final user = Supabase.instance.client.auth.currentUser;
     final raw = user?.userMetadata?['name'];
     var name = raw is String ? raw.trim() : '';
@@ -294,335 +452,75 @@ class _GreetingBlock extends StatelessWidget {
       final email = user?.email ?? '';
       name = email.contains('@') ? email.split('@').first : 'Pengendara';
     }
-    final firstName = name.split(RegExp(r'\s+')).first;
-    final greeting = _greetingPrefix(now.hour);
+    final firstName = name.split(' ').first;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // Vertical butter rule
-        Container(
-          width: 3,
-          height: 44,
-          color: AppEditorial.butter,
-          margin: const EdgeInsets.only(right: 12),
-        ),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                greeting.toUpperCase(),
-                style: AppEditorial.eyebrow(
-                  color: AppEditorial.butterDeep,
-                  fontSize: 10,
+    // Interpolasi (smooth, didorong oleh posisi scroll).
+    final collapsedHeight = topInset + 56;
+    final height =
+        expandedHeight + (collapsedHeight - expandedHeight) * t;
+    final avatar = 46 - 12 * t;
+    final nameSize = 18 - 2.5 * t;
+    final bg = Color.lerp(AppEditorial.brand, AppEditorial.canvas, t)!;
+
+    return Container(
+      height: height,
+      width: double.infinity,
+      color: bg,
+      padding: EdgeInsets.only(left: 20, right: 20, top: topInset),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: onTapProfile,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                UserAvatar(
+                  size: avatar,
+                  shape: BoxShape.circle,
+                  borderColor: const Color(0xFFFFFFFF),
+                  borderWidth: 2.5,
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                firstName,
-                style: AppEditorial.mono(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
-                  height: 1.05,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _VehicleSelector extends StatelessWidget {
-  const _VehicleSelector({
-    required this.vehicle,
-    required this.totalCount,
-    required this.onTap,
-  });
-
-  final Vehicle vehicle;
-  final int totalCount;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppEditorial.rTiny),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-        decoration: BoxDecoration(
-          color: AppEditorial.canvas,
-          border:
-              Border.all(color: AppEditorial.hairline, width: 1),
-          borderRadius: BorderRadius.circular(AppEditorial.rTiny),
-        ),
-        child: Row(
-          children: [
-            // Compact icon
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppEditorial.butterSoft,
-                borderRadius:
-                    BorderRadius.circular(AppEditorial.rTiny),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                vehicle.type.label.toLowerCase().contains('motor')
-                    ? Icons.two_wheeler_rounded
-                    : Icons.directions_car_rounded,
-                size: 16,
-                color: AppEditorial.butterDeep,
-              ),
-            ),
-            const SizedBox(width: 10),
-            // Eyebrow + name on a single tight line
-            Expanded(
-              child: Row(
-                children: [
-                  Text(
-                    vehicle.type.label.toUpperCase(),
-                    style: AppEditorial.eyebrow(
-                      fontSize: 9,
-                      color: AppEditorial.butterDeep,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      vehicle.name,
-                      style: AppEditorial.mono(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '$totalCount UNIT',
-              style: AppEditorial.eyebrow(
-                fontSize: 9,
-                color: AppEditorial.inkMuted,
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.unfold_more_rounded,
-              size: 16,
-              color: AppEditorial.inkMuted,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DottedLine extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppEditorial.hairline
-      ..strokeWidth = 1;
-    const dotSize = 1.5;
-    const gap = 4.0;
-    double x = 0;
-    while (x < size.width) {
-      canvas.drawCircle(Offset(x, size.height / 2), dotSize / 2, paint);
-      x += dotSize + gap;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// §01 — Month readout (pump-LCD style)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MonthReadout extends StatelessWidget {
-  const _MonthReadout({
-    required this.totalSpend,
-    required this.totalLiters,
-    required this.distanceKm,
-    required this.refuelCount,
-    required this.rupiah,
-  });
-
-  final num totalSpend;
-  final num totalLiters;
-  final num distanceKm;
-  final int refuelCount;
-  final NumberFormat rupiah;
-
-  @override
-  Widget build(BuildContext context) {
-    final spendStr = rupiah.format(totalSpend).trim();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Pump-display number — rupiah
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-          decoration: BoxDecoration(
-            color: AppEditorial.ink,
-            borderRadius:
-                BorderRadius.circular(AppEditorial.rCard),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    'TOTAL PENGELUARAN',
-                    style: AppEditorial.mono(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: AppEditorial.butter,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: const BoxDecoration(
-                      color: AppEditorial.butter,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    'Rp',
-                    style: AppEditorial.mono(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      color: AppEditorial.canvas
-                          .withValues(alpha: 0.7),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: FittedBox(
-                      alignment: Alignment.centerLeft,
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        spendStr,
-                        style: AppEditorial.mono(
-                          fontSize: 48,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: -1,
-                          color: AppEditorial.canvas,
-                          height: 1.0,
+                const SizedBox(width: 11),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sapaan — tampil saat full, menyusut & memudar saat collapse.
+                    ClipRect(
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        heightFactor: (1 - t).clamp(0.0, 1.0),
+                        child: Opacity(
+                          opacity: (1 - t * 1.6).clamp(0.0, 1.0),
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 1),
+                            child: Text(
+                              _greeting(DateTime.now().hour),
+                              style: AppEditorial.sans(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppEditorial.brandDeep,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        // 3-column stat grid
-        Row(
-          children: [
-            Expanded(
-              child: _StatCell(
-                label: 'LITER',
-                value: totalLiters <= 0
-                    ? '—'
-                    : totalLiters.toStringAsFixed(2),
-                unit: 'L',
-              ),
-            ),
-            Container(width: 1, height: 56, color: AppEditorial.hairline),
-            Expanded(
-              child: _StatCell(
-                label: 'JARAK',
-                value: distanceKm <= 0
-                    ? '—'
-                    : distanceKm.toStringAsFixed(0),
-                unit: 'km',
-              ),
-            ),
-            Container(width: 1, height: 56, color: AppEditorial.hairline),
-            Expanded(
-              child: _StatCell(
-                label: 'ISI',
-                value: refuelCount.toString(),
-                unit: '×',
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _StatCell extends StatelessWidget {
-  const _StatCell({
-    required this.label,
-    required this.value,
-    required this.unit,
-  });
-  final String label;
-  final String value;
-  final String unit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: AppEditorial.eyebrow(fontSize: 9.5)),
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                value,
-                style: AppEditorial.mono(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.4,
+                    Text(
+                      firstName,
+                      style: AppEditorial.heading(
+                        fontSize: nameSize,
+                        fontWeight: FontWeight.w700,
+                        color: AppEditorial.ink,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 3),
-              Text(
-                unit,
-                style: AppEditorial.mono(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: AppEditorial.inkSoft,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
+          const Spacer(),
+          _VehiclePill(vehicle: vehicle, onTap: onPickVehicle),
         ],
       ),
     );
@@ -630,11 +528,374 @@ class _StatCell extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §02 — Last refuel single line
+// Hero body — saldo (pengeluaran bulan ini) + ringkasan. Ikut scroll.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _LastRefuelLine extends StatelessWidget {
-  const _LastRefuelLine({
+class _HeroBody extends StatelessWidget {
+  const _HeroBody({
+    required this.totalSpend,
+    required this.totalLiters,
+    required this.distanceKm,
+    required this.refuelCount,
+    required this.rupiah,
+    required this.loading,
+  });
+
+  final num totalSpend;
+  final num totalLiters;
+  final num distanceKm;
+  final int refuelCount;
+  final NumberFormat rupiah;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final monthName =
+        DateFormat('MMMM yyyy', 'id_ID').format(DateTime.now());
+
+    return Container(
+      width: double.infinity,
+      color: AppEditorial.brand,
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Pengeluaran bensin · $monthName',
+            style: AppEditorial.sans(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: AppEditorial.ink.withValues(alpha: 0.62),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                'Rp',
+                style: AppEditorial.heading(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  color: AppEditorial.ink.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: FittedBox(
+                  alignment: Alignment.centerLeft,
+                  fit: BoxFit.scaleDown,
+                  child: loading
+                      ? Text(
+                          '•••',
+                          style: AppEditorial.heading(
+                            fontSize: 44,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -1.8,
+                            color: AppEditorial.ink,
+                            height: 1.0,
+                          ),
+                        )
+                      : AnimatedCount(
+                          value: totalSpend.toDouble(),
+                          formatter: (v) => rupiah.format(v).trim(),
+                          style: AppEditorial.heading(
+                            fontSize: 44,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -1.8,
+                            color: AppEditorial.ink,
+                            height: 1.0,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            decoration: BoxDecoration(
+              color: AppEditorial.ink.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+            ),
+            child: Row(
+              children: [
+                _HeroStat(
+                  label: 'Liter',
+                  value:
+                      totalLiters <= 0 ? '—' : totalLiters.toStringAsFixed(1),
+                  unit: 'L',
+                ),
+                _heroDivider(),
+                _HeroStat(
+                  label: 'Jarak',
+                  value: distanceKm <= 0 ? '—' : distanceKm.toStringAsFixed(0),
+                  unit: 'km',
+                ),
+                _heroDivider(),
+                _HeroStat(
+                  label: 'Pengisian',
+                  value: refuelCount.toString(),
+                  unit: '×',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroDivider() => Container(
+        width: 1,
+        height: 30,
+        color: AppEditorial.ink.withValues(alpha: 0.1),
+      );
+}
+
+class _HeroStat extends StatelessWidget {
+  const _HeroStat(
+      {required this.label, required this.value, required this.unit});
+  final String label;
+  final String value;
+  final String unit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: AppEditorial.sans(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppEditorial.ink.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Flexible(
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppEditorial.heading(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppEditorial.ink,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  unit,
+                  style: AppEditorial.sans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppEditorial.ink.withValues(alpha: 0.55),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VehiclePill extends StatelessWidget {
+  const _VehiclePill({required this.vehicle, required this.onTap});
+  final Vehicle vehicle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isMotor = vehicle.type.label.toLowerCase().contains('motor');
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFFFF),
+          borderRadius: BorderRadius.circular(AppEditorial.rPill),
+          boxShadow: [
+            BoxShadow(
+              color: AppEditorial.brandDeep.withValues(alpha: 0.16),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: const BoxDecoration(
+                color: AppEditorial.brandTint,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isMotor
+                    ? PhosphorIconsRegular.motorcycle
+                    : PhosphorIconsRegular.car,
+                size: 17,
+                color: AppEditorial.brandDeep,
+              ),
+            ),
+            const SizedBox(width: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 92),
+              child: Text(
+                vehicle.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: AppEditorial.heading(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppEditorial.ink,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(PhosphorIconsRegular.caretUpDown,
+                size: 16, color: AppEditorial.inkMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quick actions — kartu putih mengambang menumpuk hero
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _QuickActions extends StatelessWidget {
+  const _QuickActions({
+    this.onAssistant,
+    this.onCalculator,
+    this.onHistory,
+    this.onTimeline,
+  });
+
+  final VoidCallback? onAssistant;
+  final VoidCallback? onCalculator;
+  final VoidCallback? onHistory;
+  final VoidCallback? onTimeline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+      decoration: BoxDecoration(
+        color: AppEditorial.cream,
+        borderRadius: BorderRadius.circular(AppEditorial.rCard),
+        boxShadow: AppEditorial.softShadow,
+      ),
+      child: Row(
+        children: [
+          _QuickAction(
+            icon: PhosphorIconsRegular.wrench,
+            label: 'AI',
+            onTap: onAssistant,
+            highlight: true,
+          ),
+          _QuickAction(
+            icon: PhosphorIconsRegular.calculator,
+            label: 'Kalkulator',
+            onTap: onCalculator,
+          ),
+          _QuickAction(
+            icon: PhosphorIconsRegular.receipt,
+            label: 'Riwayat',
+            onTap: onHistory,
+          ),
+          _QuickAction(
+            icon: PhosphorIconsRegular.clockCounterClockwise,
+            label: 'Linimasa',
+            onTap: onTimeline,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.highlight = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap == null
+            ? null
+            : () {
+                HapticFeedback.lightImpact();
+                onTap!();
+              },
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: highlight
+                    ? AppEditorial.brand
+                    : AppEditorial.brandTint,
+                borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+              ),
+              child: Icon(icon,
+                  size: 24,
+                  color:
+                      highlight ? AppEditorial.ink : AppEditorial.brandDeep),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: AppEditorial.sans(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: AppEditorial.inkSoft,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pengisian terakhir
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LastRefuelCard extends StatelessWidget {
+  const _LastRefuelCard({
     required this.refuel,
     required this.rupiah,
     required this.date,
@@ -647,54 +908,42 @@ class _LastRefuelLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppEditorial.butter,
+        color: AppEditorial.cream,
         borderRadius: BorderRadius.circular(AppEditorial.rCard),
+        boxShadow: AppEditorial.softShadow,
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 3,
-            height: 44,
-            color: AppEditorial.ink,
-            margin: const EdgeInsets.only(right: 14),
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppEditorial.brandTint,
+              borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+            ),
+            child: const Icon(PhosphorIconsRegular.gasPump,
+                color: AppEditorial.brandDeep, size: 24),
           ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      '${refuel.liters.toStringAsFixed(2)} L',
-                      style: AppEditorial.mono(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text('·',
-                        style: AppEditorial.mono(
-                            fontSize: 14, color: AppEditorial.ink)),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Rp ${rupiah.format(refuel.totalRp).trim()}',
-                      style: AppEditorial.mono(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                Text(
+                  'Rp ${rupiah.format(refuel.totalRp).trim()}',
+                  style: AppEditorial.heading(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  date.format(refuel.refuelDate),
-                  style: AppEditorial.mono(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: AppEditorial.ink.withValues(alpha: 0.7),
+                  '${refuel.liters.toStringAsFixed(2)} L · ${date.format(refuel.refuelDate)}',
+                  style: AppEditorial.sans(
+                    fontSize: 12.5,
+                    color: AppEditorial.inkSoft,
                   ),
                 ),
               ],
@@ -703,19 +952,17 @@ class _LastRefuelLine extends StatelessWidget {
           if (refuel.isFullTank)
             Container(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: AppEditorial.ink,
-                borderRadius:
-                    BorderRadius.circular(AppEditorial.rTiny),
+                color: AppEditorial.brand,
+                borderRadius: BorderRadius.circular(AppEditorial.rPill),
               ),
               child: Text(
-                'FULL',
-                style: AppEditorial.mono(
-                  fontSize: 9,
+                'Full',
+                style: AppEditorial.sans(
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: AppEditorial.canvas,
-                  letterSpacing: 0.6,
+                  color: AppEditorial.ink,
                 ),
               ),
             ),
@@ -726,7 +973,7 @@ class _LastRefuelLine extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §03 — Prediction block
+// Prediksi bensin
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FuelPredictionBlock extends StatelessWidget {
@@ -752,7 +999,7 @@ class _FuelPredictionBlock extends StatelessWidget {
       }(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const SizedBox.shrink();
+          return _PredictionSkeleton();
         }
         if (snap.hasError || snap.data == null) {
           return const SizedBox.shrink();
@@ -762,7 +1009,6 @@ class _FuelPredictionBlock extends StatelessWidget {
         final trips = snap.data!.$2;
         final samples = snap.data!.$3;
 
-        // User preferences (used by both prior and daily-km estimate).
         final meta =
             Supabase.instance.client.auth.currentUser?.userMetadata;
         final usageProfile =
@@ -773,251 +1019,365 @@ class _FuelPredictionBlock extends StatelessWidget {
             ? meta!['weekly_km'] as num
             : null;
 
-        // Posterior km/L (Bayesian-blended prior + measured samples).
-        final estimate = PredictionService.posteriorKmPerLiter(
+        final f = PredictionService.forecastRefill(
           vehicle: vehicle,
+          refuels: refuels,
+          trips: trips,
           samples: samples,
           primaryCity: primaryCity,
           usageProfile: usageProfile,
-        );
-        final kmPerLiter = estimate.kmPerLiter;
-
-        // Daily-km estimate, with provenance label for the user.
-        final dailyKm = PredictionService.dailyKmEstimate(
-          recentTrips: trips,
           weeklyKmPref: weeklyKmPref,
-          usageProfile: usageProfile,
         );
-        final avgDailyKm = dailyKm.kmPerDay;
 
-        // ── Tank-level estimation ───────────────────────────────────
-        // If we have refuels, base "remaining" on the last refuel +
-        // distance traveled since. If we have NO refuels at all yet,
-        // we still want to render something usable using preferences
-        // alone (the whole point of cold-start prior).
-        final lastRefuel = refuels.isNotEmpty ? refuels.first : null;
-
-        double remaining;
-        double remainingPct;
-        if (lastRefuel != null) {
-          final kmSinceLast = trips
-              .where((t) => t.startedAt.isAfter(lastRefuel.refuelDate))
-              .fold<double>(0, (s, t) => s + (t.distanceKm ?? 0));
-          final consumed = kmSinceLast / kmPerLiter;
-          remaining = (lastRefuel.liters.toDouble() - consumed)
-              .clamp(0.0, lastRefuel.liters.toDouble());
-          remainingPct = (remaining /
-                  (lastRefuel.liters == 0
-                      ? 1.0
-                      : lastRefuel.liters.toDouble()))
-              .clamp(0.0, 1.0);
-        } else {
-          // No data yet — assume tank is roughly full. UI will show
-          // PRIOR badge to indicate uncertainty.
-          remaining = (vehicle.tankCapacityLiters?.toDouble() ?? 0) * 0.9;
-          remainingPct = 0.9;
-        }
-
-        // ── Days left until refill ──────────────────────────────────
-        double? daysLeft;
-        DateTime? predictedDate;
-        if (avgDailyKm > 0 && remaining > 0) {
-          final dailyCons = avgDailyKm / kmPerLiter;
-          if (dailyCons > 0) {
-            daysLeft = remaining / dailyCons;
-            predictedDate = DateTime.now()
-                .add(Duration(hours: (daysLeft * 24).round()));
-          }
-        }
+        final remainingPct = f.remainingPct;
+        final remaining = f.remainingLiters;
+        final daysLeft = f.daysLeft;
+        final predictedDate = f.predictedDate;
 
         final isWarning =
             remainingPct < 0.15 || (daysLeft != null && daysLeft < 2);
-        final accent =
-            isWarning ? AppEditorial.rust : AppEditorial.butterDeep;
+        final accent = isWarning ? AppEditorial.rust : AppEditorial.sage;
 
-        return Container(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+        return GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    FuelDetailPage(forecast: f, vehicle: vehicle),
+              ),
+            );
+          },
+          child: Container(
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: AppEditorial.cream,
             borderRadius: BorderRadius.circular(AppEditorial.rCard),
-            border:
-                Border.all(color: AppEditorial.hairlineSoft, width: 1),
+            boxShadow: AppEditorial.softShadow,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Big % readout + warning state
               Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(
-                    (remainingPct * 100).toStringAsFixed(0),
-                    style: AppEditorial.mono(
-                      fontSize: 56,
-                      fontWeight: FontWeight.w500,
-                      color: accent,
-                      letterSpacing: -2,
-                      height: 0.95,
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8, left: 4),
-                    child: Text(
-                      '%',
-                      style: AppEditorial.mono(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w500,
-                        color: accent,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                  // Ring persen sisa bensin
+                  SizedBox(
+                    width: 76,
+                    height: 76,
+                    child: Stack(
+                      alignment: Alignment.center,
                       children: [
+                        SizedBox(
+                          width: 76,
+                          height: 76,
+                          child: CircularProgressIndicator(
+                            value: remainingPct.clamp(0.0, 1.0),
+                            strokeWidth: 7,
+                            backgroundColor: AppEditorial.hairline,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(accent),
+                            strokeCap: StrokeCap.round,
+                          ),
+                        ),
                         Text(
-                          isWarning ? 'HAMPIR HABIS' : 'NORMAL',
-                          style: AppEditorial.mono(
-                            fontSize: 10,
+                          '${(remainingPct * 100).toStringAsFixed(0)}%',
+                          style: AppEditorial.heading(
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: accent,
-                            letterSpacing: 0.8,
+                            color: AppEditorial.ink,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _StatusPill(
+                          label: isWarning ? 'Hampir habis' : 'Normal',
+                          color: accent,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${remaining.toStringAsFixed(1)} L tersisa',
+                          style: AppEditorial.heading(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${remaining.toStringAsFixed(1)} L tersisa',
-                          style: AppEditorial.mono(
-                            fontSize: 11,
+                          daysLeft != null
+                              ? 'Cukup untuk ~${daysLeft.toStringAsFixed(0)} hari lagi'
+                              : 'Belum cukup data',
+                          style: AppEditorial.sans(
+                            fontSize: 12.5,
                             color: AppEditorial.inkSoft,
                           ),
                         ),
                       ],
                     ),
                   ),
+                  const Icon(PhosphorIconsRegular.caretRight,
+                      size: 22, color: AppEditorial.inkMuted),
                 ],
               ),
-              const SizedBox(height: 12),
-              // Confidence badge — tells the user how grounded the
-              // prediction is in their actual data vs the prior.
-              _ConfidenceBadge(
-                source: estimate.source,
-                sampleCount: estimate.sampleCount,
-              ),
-              const SizedBox(height: 10),
-              // Progress bar
-              ClipRRect(
-                borderRadius:
-                    BorderRadius.circular(AppEditorial.rPill),
-                child: LinearProgressIndicator(
-                  value: remainingPct,
-                  minHeight: 6,
-                  backgroundColor: AppEditorial.hairline,
-                  valueColor: AlwaysStoppedAnimation<Color>(accent),
-                ),
-              ),
-              const SizedBox(height: 12),
-              EditorialDataRow(
-                label: 'Efisiensi',
-                value: '${kmPerLiter.toStringAsFixed(1)} km/L',
-              ),
-              EditorialDataRow(
-                label: 'Sisa hari',
-                value: daysLeft != null
-                    ? '~${daysLeft.toStringAsFixed(0)} hari'
-                    : '—',
-                valueStyle: AppEditorial.mono(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: isWarning
-                      ? AppEditorial.rust
-                      : AppEditorial.ink,
-                  tabular: true,
-                ),
-              ),
+              const SizedBox(height: 16),
+              Container(height: 1, color: AppEditorial.hairlineSoft),
+              const SizedBox(height: 4),
               EditorialDataRow(
                 label: 'Perkiraan isi ulang',
                 value: predictedDate != null
-                    ? DateFormat('d MMM yyyy', 'id_ID')
-                        .format(predictedDate)
+                    ? DateFormat('d MMM yyyy', 'id_ID').format(predictedDate)
                     : '—',
-                isLast: true,
               ),
-              const SizedBox(height: 6),
-              Text(
-                'sumber jarak: ${dailyKm.source}',
-                style: AppEditorial.sans(
-                  fontSize: 10.5,
-                  color: AppEditorial.inkMuted,
-                ),
+              EditorialDataRow(
+                label: 'Konsumsi',
+                value: f.litersPerDay > 0
+                    ? '${f.litersPerDay.toStringAsFixed(2)} L/hari'
+                    : '—',
+              ),
+              EditorialDataRow(
+                label: 'Efisiensi',
+                value: '${f.kmPerLiter.toStringAsFixed(1)} km/L',
+                isLast: true,
               ),
             ],
           ),
-        );
+        ));
       },
     );
   }
 }
 
-/// Small badge: "PRIOR · setup awal" / "MIXED · 3 ukuran" / "DATA-DRIVEN · 12 ukuran".
-class _ConfidenceBadge extends StatelessWidget {
-  const _ConfidenceBadge({
-    required this.source,
-    required this.sampleCount,
-  });
-
-  final String source;
-  final int sampleCount;
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label, required this.color});
+  final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (source) {
-      'DATA-DRIVEN' => AppEditorial.sage,
-      'MIXED' => AppEditorial.butterDeep,
-      _ => AppEditorial.inkMuted,
-    };
-    final detail = sampleCount == 0
-        ? 'belum ada ukuran'
-        : '$sampleCount ukuran';
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            border: Border.all(color: color, width: 1),
-            borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppEditorial.rPill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
-          child: Text(
-            source,
-            style: AppEditorial.mono(
-              fontSize: 9,
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: AppEditorial.sans(
+              fontSize: 11.5,
               fontWeight: FontWeight.w700,
               color: color,
-              letterSpacing: 0.6,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PredictionSkeleton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 180,
+      decoration: BoxDecoration(
+        color: AppEditorial.cream,
+        borderRadius: BorderRadius.circular(AppEditorial.rCard),
+        boxShadow: AppEditorial.softShadow,
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+              strokeWidth: 2.4, color: AppEditorial.inkMuted),
         ),
-        const SizedBox(width: 8),
-        Text(
-          detail,
-          style: AppEditorial.mono(
-            fontSize: 10,
-            color: AppEditorial.inkMuted,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §04 — Vehicle row (compact, with photo cover)
+// Riwayat — kalender bulan ini (tanda pengisian)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _HistoryCalendar extends StatelessWidget {
+  const _HistoryCalendar({required this.refuels});
+  final List<Refuel> refuels;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final monthName =
+        DateFormat('MMMM yyyy', 'id_ID').format(now);
+
+    // Tandai tanggal (bulan ini) yang punya pengisian.
+    final marks = <int>{};
+    for (final r in refuels) {
+      if (r.refuelDate.year == now.year &&
+          r.refuelDate.month == now.month) {
+        marks.add(r.refuelDate.day);
+      }
+    }
+
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    final firstWeekday = DateTime(now.year, now.month, 1).weekday; // Mon=1
+    final leading = firstWeekday - 1;
+    final totalCells = leading + daysInMonth;
+    final rows = (totalCells / 7.0).ceil();
+
+    const weekdays = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      decoration: BoxDecoration(
+        color: AppEditorial.cream,
+        borderRadius: BorderRadius.circular(AppEditorial.rCard),
+        boxShadow: AppEditorial.softShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(
+                monthName,
+                style: AppEditorial.heading(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: AppEditorial.brand,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Ada pengisian',
+                style: AppEditorial.sans(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppEditorial.inkMuted,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Header hari
+          Row(
+            children: [
+              for (final d in weekdays)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      d,
+                      style: AppEditorial.sans(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppEditorial.inkMuted,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Grid tanggal
+          for (var row = 0; row < rows; row++)
+            Row(
+              children: [
+                for (var col = 0; col < 7; col++)
+                  Expanded(
+                    child: _DayCell(
+                      day: _dayForCell(row, col, leading, daysInMonth),
+                      hasRefuel: marks.contains(
+                          _dayForCell(row, col, leading, daysInMonth)),
+                      isToday: _dayForCell(row, col, leading, daysInMonth) ==
+                          now.day,
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  int? _dayForCell(int row, int col, int leading, int daysInMonth) {
+    final index = row * 7 + col;
+    final day = index - leading + 1;
+    if (day < 1 || day > daysInMonth) return null;
+    return day;
+  }
+}
+
+class _DayCell extends StatelessWidget {
+  const _DayCell({
+    required this.day,
+    required this.hasRefuel,
+    required this.isToday,
+  });
+  final int? day;
+  final bool hasRefuel;
+  final bool isToday;
+
+  @override
+  Widget build(BuildContext context) {
+    if (day == null) {
+      return const SizedBox(height: 40);
+    }
+    return SizedBox(
+      height: 40,
+      child: Center(
+        child: Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: hasRefuel ? AppEditorial.brand : Colors.transparent,
+            shape: BoxShape.circle,
+            border: isToday && !hasRefuel
+                ? Border.all(color: AppEditorial.ink, width: 1.4)
+                : null,
+          ),
+          child: Text(
+            '$day',
+            style: AppEditorial.mono(
+              fontSize: 13,
+              fontWeight: hasRefuel || isToday
+                  ? FontWeight.w700
+                  : FontWeight.w500,
+              color: hasRefuel
+                  ? AppEditorial.ink
+                  : (isToday ? AppEditorial.ink : AppEditorial.inkSoft),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vehicle row (di sheet pemilih kendaraan)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _VehicleRow extends StatelessWidget {
@@ -1033,90 +1393,79 @@ class _VehicleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMotor = vehicle.type.label.toLowerCase().contains('motor');
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppEditorial.rCard),
       child: Container(
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppEditorial.cream,
+          color: isSelected ? AppEditorial.brandTint : AppEditorial.cream,
           border: Border.all(
-            color: isSelected
-                ? AppEditorial.ink
-                : AppEditorial.hairlineSoft,
-            width: isSelected ? 1.5 : 1,
+            color: isSelected ? AppEditorial.brand : AppEditorial.hairline,
+            width: isSelected ? 1.6 : 1,
           ),
           borderRadius: BorderRadius.circular(AppEditorial.rCard),
         ),
         child: Row(
           children: [
-            // Cover thumbnail (square)
-            Padding(
-              padding: const EdgeInsets.all(6),
-              child: VehicleCover(
-                vehicle: vehicle,
-                width: 80,
-                height: 80,
-                borderRadius: AppEditorial.rTiny,
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: AppEditorial.brandSoft,
+                borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+              ),
+              child: Icon(
+                isMotor
+                    ? PhosphorIconsRegular.motorcycle
+                    : PhosphorIconsRegular.car,
+                size: 24,
+                color: AppEditorial.brandDeep,
               ),
             ),
+            const SizedBox(width: 14),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 12, 12, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      vehicle.type.label.toUpperCase(),
-                      style: AppEditorial.eyebrow(
-                          color: AppEditorial.butterDeep,
-                          fontSize: 9.5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    vehicle.name,
+                    style: AppEditorial.heading(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      vehicle.name,
-                      style: AppEditorial.mono(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    vehicle.tankCapacityLiters == null
+                        ? '${vehicle.type.label} · tanki belum diatur'
+                        : '${vehicle.type.label} · tanki ${vehicle.tankCapacityLiters}L',
+                    style: AppEditorial.sans(
+                      fontSize: 12,
+                      color: AppEditorial.inkSoft,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      vehicle.tankCapacityLiters == null
-                          ? 'tanki belum diatur'
-                          : 'tanki ${vehicle.tankCapacityLiters}L',
-                      style: AppEditorial.sans(
-                        fontSize: 11.5,
-                        color: AppEditorial.inkSoft,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(right: 14),
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isSelected
-                      ? AppEditorial.ink
-                      : AppEditorial.canvas,
-                  border: Border.all(
-                    color: isSelected
-                        ? AppEditorial.ink
-                        : AppEditorial.hairline,
-                    width: 1,
-                  ),
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? AppEditorial.ink : Colors.transparent,
+                border: Border.all(
+                  color:
+                      isSelected ? AppEditorial.ink : AppEditorial.hairline,
+                  width: 1.4,
                 ),
-                child: isSelected
-                    ? const Icon(Icons.check_rounded,
-                        size: 14, color: AppEditorial.canvas)
-                    : null,
               ),
+              child: isSelected
+                  ? const Icon(PhosphorIconsRegular.check,
+                      size: 15, color: AppEditorial.brand)
+                  : null,
             ),
           ],
         ),
@@ -1126,132 +1475,201 @@ class _VehicleRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §05 — Log row (newspaper logbook line)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _LogRow extends StatelessWidget {
-  const _LogRow({
-    required this.refuel,
-    required this.rupiah,
-    required this.date,
-    required this.isLast,
-  });
-
-  final Refuel refuel;
-  final NumberFormat rupiah;
-  final DateFormat date;
-  final bool isLast;
-
-  @override
-  Widget build(BuildContext context) {
-    final dayStr = DateFormat('dd').format(refuel.refuelDate);
-    final monthStr =
-        DateFormat('MMM', 'id_ID').format(refuel.refuelDate).toUpperCase();
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: isLast ? Colors.transparent : AppEditorial.hairline,
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Date — stacked calendar style
-          SizedBox(
-            width: 44,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  dayStr,
-                  style: AppEditorial.mono(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    height: 1.0,
-                    letterSpacing: -0.4,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  monthStr,
-                  style: AppEditorial.eyebrow(
-                    fontSize: 9,
-                    color: AppEditorial.inkMuted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          // Liter - rupiah
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Rp ${rupiah.format(refuel.totalRp).trim()}',
-                  style: AppEditorial.mono(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Text(
-                  '${refuel.liters.toStringAsFixed(2)} L · ${rupiah.format(refuel.pricePerLiterSnapshot).trim()}/L',
-                  style: AppEditorial.mono(
-                    fontSize: 11,
-                    color: AppEditorial.inkSoft,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (refuel.isFullTank)
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppEditorial.butter,
-                borderRadius:
-                    BorderRadius.circular(AppEditorial.rTiny),
-              ),
-              child: Text(
-                'FULL',
-                style: AppEditorial.mono(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Loading / Error / Empty
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _CenteredLoading extends StatelessWidget {
-  const _CenteredLoading();
+class _SummarySkeleton extends StatelessWidget {
+  const _SummarySkeleton();
+
+  // Tone placeholder untuk area di atas panel kuning.
+  static const Color _onBrand = Color(0xFFE9B528);
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
     return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: const [
-        SizedBox(height: 200),
-        Center(
-          child: CircularProgressIndicator(color: AppEditorial.ink),
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      children: [
+        // ── Header + hero (kuning) ──
+        Container(
+          color: AppEditorial.brand,
+          padding: EdgeInsets.fromLTRB(20, topInset + 14, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Skeleton.circle(size: 46, color: _onBrand),
+                  const SizedBox(width: 11),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Skeleton(width: 70, height: 11, baseColor: _onBrand),
+                      SizedBox(height: 7),
+                      Skeleton(width: 96, height: 16, baseColor: _onBrand),
+                    ],
+                  ),
+                  const Spacer(),
+                  Skeleton(
+                    width: 104,
+                    height: 42,
+                    radius: AppEditorial.rPill,
+                    baseColor: const Color(0xFFFFFFFF),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 26),
+              const Skeleton(width: 190, height: 12, baseColor: _onBrand),
+              const SizedBox(height: 14),
+              const Skeleton(width: 230, height: 38, baseColor: _onBrand),
+              const SizedBox(height: 22),
+              Skeleton(
+                width: double.infinity,
+                height: 58,
+                baseColor: _onBrand,
+              ),
+            ],
+          ),
         ),
+
+        // ── Quick actions (kartu putih) ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: EditorialCard(
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+            child: Row(
+              children: List.generate(
+                4,
+                (_) => Expanded(
+                  child: Column(
+                    children: const [
+                      Skeleton(width: 52, height: 52, radius: AppEditorial.rTiny),
+                      SizedBox(height: 8),
+                      Skeleton(width: 46, height: 10),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 28),
+
+        // ── Prediksi bensin ──
+        _section(),
+        const SizedBox(height: 14),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: EditorialCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: const [
+                    Skeleton.circle(size: 72),
+                    SizedBox(width: 18),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Skeleton(width: 80, height: 22, radius: AppEditorial.rPill),
+                          SizedBox(height: 12),
+                          Skeleton(width: 140, height: 20),
+                          SizedBox(height: 8),
+                          Skeleton(width: 110, height: 12),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                for (var i = 0; i < 3; i++) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: const [
+                      Skeleton(width: 120, height: 13),
+                      Skeleton(width: 80, height: 13),
+                    ],
+                  ),
+                  if (i < 2) const SizedBox(height: 18),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 28),
+
+        // ── Pengisian terakhir ──
+        _section(),
+        const SizedBox(height: 14),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: EditorialCard(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: const [
+                Skeleton(width: 48, height: 48, radius: AppEditorial.rTiny),
+                SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Skeleton(width: 130, height: 18),
+                      SizedBox(height: 8),
+                      Skeleton(width: 170, height: 12),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 28),
+
+        // ── Riwayat (kalender) ──
+        _section(),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: EditorialCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: const [
+                    Skeleton(width: 110, height: 18),
+                    Skeleton(width: 90, height: 12),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                for (var r = 0; r < 4; r++) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: List.generate(
+                      7,
+                      (_) => const Skeleton.circle(size: 26),
+                    ),
+                  ),
+                  if (r < 3) const SizedBox(height: 16),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 40),
       ],
     );
   }
+
+  Widget _section() => const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Skeleton(width: 150, height: 18),
+        ),
+      );
 }
 
 class _CenteredError extends StatelessWidget {
@@ -1262,17 +1680,11 @@ class _CenteredError extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 80, 20, 20),
       children: [
-        const SizedBox(height: 40),
-        const EditorialEyebrow('ERROR'),
-        const SizedBox(height: 10),
         Text(
-          'Gagal memuat data.',
-          style: AppEditorial.mono(
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
-          ),
+          'Gagal memuat data',
+          style: AppEditorial.heading(fontSize: 22, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 10),
         Text(
@@ -1297,10 +1709,8 @@ class _CenteredEmpty extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
       children: [
-        const SizedBox(height: 40),
-        // Empty-state illustration
         AspectRatio(
           aspectRatio: 800 / 600,
           child: Image.asset(
@@ -1309,14 +1719,9 @@ class _CenteredEmpty extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        const EditorialEyebrow('PEMBUKAAN'),
-        const SizedBox(height: 10),
         Text(
           title,
-          style: AppEditorial.mono(
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppEditorial.heading(fontSize: 22, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 6),
         Text(

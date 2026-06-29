@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme.dart';
 import 'email_verify_page.dart';
+import 'sign_in_page.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -89,7 +91,7 @@ class _SignUpPageState extends State<SignUpPage> {
       appBar: AppBar(
         leading: IconButton(
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(PhosphorIconsRegular.arrowLeft),
         ),
       ),
       body: SafeArea(
@@ -97,38 +99,17 @@ class _SignUpPageState extends State<SignUpPage> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      Text('BENSINKU',
-                          style: AppEditorial.mono(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
-                          )),
-                      const SizedBox(width: 10),
-                      Container(
-                        width: 4,
-                        height: 4,
-                        decoration: const BoxDecoration(
-                          color: AppEditorial.butter,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text('VOL.02 · DAFTAR',
-                          style: AppEditorial.eyebrow()),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
+                  const AuthBrandMark(),
+                  const SizedBox(height: 28),
                   Text(
-                    'Buat akun baru.',
-                    style: AppEditorial.mono(
+                    'Buat akun baru',
+                    style: AppEditorial.heading(
                       fontSize: 28,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -136,111 +117,115 @@ class _SignUpPageState extends State<SignUpPage> {
                   Text(
                     'Isi form, lalu cek email untuk verifikasi.',
                     style: AppEditorial.sans(
-                      fontSize: 13,
+                      fontSize: 13.5,
                       color: AppEditorial.inkSoft,
+                      height: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 28),
-                  Container(height: 1, color: AppEditorial.ink),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 22),
 
-                  TextField(
-                    controller: _nameController,
-                    textInputAction: TextInputAction.next,
-                    textCapitalization: TextCapitalization.words,
-                    autofillHints: const [AutofillHints.name],
-                    style: AppEditorial.mono(
-                        fontSize: 15, fontWeight: FontWeight.w500),
-                    decoration: const InputDecoration(
-                      labelText: 'NAMA LENGKAP',
-                      hintText: 'John Doe',
+                  // Form card
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppEditorial.cream,
+                      borderRadius:
+                          BorderRadius.circular(AppEditorial.rCard),
+                      boxShadow: AppEditorial.softShadow,
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    autofillHints: const [AutofillHints.email],
-                    style: AppEditorial.mono(
-                        fontSize: 15, fontWeight: FontWeight.w500),
-                    decoration: const InputDecoration(
-                      labelText: 'EMAIL',
-                      hintText: 'contoh@email.com',
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePass,
-                    textInputAction: TextInputAction.next,
-                    autofillHints: const [AutofillHints.newPassword],
-                    style: AppEditorial.mono(
-                        fontSize: 15, fontWeight: FontWeight.w500),
-                    decoration: InputDecoration(
-                      labelText: 'PASSWORD',
-                      hintText: 'Min. 8 karakter',
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePass
-                              ? Icons.visibility_off_rounded
-                              : Icons.visibility_rounded,
-                          color: AppEditorial.inkSoft,
-                          size: 18,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: _nameController,
+                          textInputAction: TextInputAction.next,
+                          textCapitalization: TextCapitalization.words,
+                          autofillHints: const [AutofillHints.name],
+                          decoration: const InputDecoration(
+                            labelText: 'Nama lengkap',
+                            hintText: 'John Doe',
+                          ),
                         ),
-                        onPressed: () => setState(
-                            () => _obscurePass = !_obscurePass),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: _confirmController,
-                    obscureText: _obscureConfirm,
-                    textInputAction: TextInputAction.done,
-                    style: AppEditorial.mono(
-                        fontSize: 15, fontWeight: FontWeight.w500),
-                    onSubmitted: (_) => _busy ? null : _signUp(),
-                    decoration: InputDecoration(
-                      labelText: 'KONFIRMASI PASSWORD',
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscureConfirm
-                              ? Icons.visibility_off_rounded
-                              : Icons.visibility_rounded,
-                          color: AppEditorial.inkSoft,
-                          size: 18,
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
+                          autofillHints: const [AutofillHints.email],
+                          decoration: const InputDecoration(
+                            labelText: 'Email',
+                            hintText: 'contoh@email.com',
+                          ),
                         ),
-                        onPressed: () => setState(
-                            () => _obscureConfirm = !_obscureConfirm),
-                      ),
-                    ),
-                  ),
-
-                  if (_error != null) ...[
-                    const SizedBox(height: 14),
-                    _ErrorBox(message: _error!),
-                  ],
-
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _busy ? null : _signUp,
-                    child: _busy
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppEditorial.canvas,
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: _obscurePass,
+                          textInputAction: TextInputAction.next,
+                          autofillHints: const [AutofillHints.newPassword],
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            hintText: 'Min. 8 karakter',
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePass
+                                    ? PhosphorIconsRegular.eyeSlash
+                                    : PhosphorIconsRegular.eye,
+                                color: AppEditorial.inkSoft,
+                                size: 20,
+                              ),
+                              onPressed: () => setState(
+                                  () => _obscurePass = !_obscurePass),
                             ),
-                          )
-                        : const Text('DAFTAR & VERIFIKASI →'),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _confirmController,
+                          obscureText: _obscureConfirm,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _busy ? null : _signUp(),
+                          decoration: InputDecoration(
+                            labelText: 'Konfirmasi password',
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscureConfirm
+                                    ? PhosphorIconsRegular.eyeSlash
+                                    : PhosphorIconsRegular.eye,
+                                color: AppEditorial.inkSoft,
+                                size: 20,
+                              ),
+                              onPressed: () => setState(
+                                  () => _obscureConfirm = !_obscureConfirm),
+                            ),
+                          ),
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 16),
+                          _ErrorBox(message: _error!),
+                        ],
+                        const SizedBox(height: 20),
+                        FilledButton(
+                          onPressed: _busy ? null : _signUp,
+                          child: _busy
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFFFFFFFF),
+                                  ),
+                                )
+                              : const Text('Daftar'),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   Center(
                     child: TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('SUDAH PUNYA AKUN? MASUK'),
+                      child: const Text('Sudah punya akun? Masuk'),
                     ),
                   ),
                 ],
@@ -260,23 +245,25 @@ class _ErrorBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: AppEditorial.rust, width: 1),
+        color: AppEditorial.rustSoft,
         borderRadius: BorderRadius.circular(AppEditorial.rTiny),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppEditorial.rust, size: 16),
-          const SizedBox(width: 8),
+          const Icon(PhosphorIconsRegular.warningCircle,
+              color: AppEditorial.rust, size: 18),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
               style: AppEditorial.sans(
                 fontSize: 12.5,
+                fontWeight: FontWeight.w500,
                 color: AppEditorial.rust,
+                height: 1.4,
               ),
             ),
           ),

@@ -31,6 +31,45 @@ enum LocationPermissionStatus {
   alwaysGranted,
 }
 
+/// Outcome of a trip stop / auto-stop.
+///
+/// We need a richer return type than just `Trip?` because of the
+/// "invalid recording" case: user taps START → almost no GPS fix →
+/// taps STOP within a few seconds. We don't want that row sitting in
+/// the database polluting history and the prediction prior, so the
+/// service deletes it and reports back why.
+class TripStopResult {
+  const TripStopResult.saved(this.trip)
+      : discarded = false,
+        reason = TripDiscardReason.none;
+  const TripStopResult.discarded(this.reason)
+      : trip = null,
+        discarded = true;
+
+  /// The persisted trip, or `null` if it was discarded.
+  final Trip? trip;
+
+  /// True jika rekaman dibuang (tidak masuk DB). UI harus tampilkan
+  /// dialog "rekaman dibatalkan" alih-alih summary normal.
+  final bool discarded;
+
+  /// Alasan kenapa di-discard. `none` saat trip valid.
+  final TripDiscardReason reason;
+}
+
+enum TripDiscardReason {
+  none,
+
+  /// Total durasi < ambang minimum (default 30 detik).
+  tooShortDuration,
+
+  /// Total jarak < ambang minimum (default 100 m).
+  tooShortDistance,
+
+  /// Tidak cukup waypoint GPS (default 5).
+  tooFewWaypoints,
+}
+
 /// Handles GPS-based trip tracking.
 ///
 /// Usage:
@@ -63,12 +102,34 @@ class TripService extends ChangeNotifier {
   Timer? _flushTimer;
 
   // ── Idle auto-stop ──────────────────────────────────────────────────
-  /// If no waypoint with significant movement (>30m from previous) arrives
-  /// for this duration, the trip is auto-stopped. The idle window is
-  /// trimmed from the recorded trip (ended_at = last moving waypoint time).
+  /// If the device doesn't genuinely move (stays within
+  /// [_movementThresholdMeters] of an anchor point) for this long, the
+  /// trip is auto-stopped. The idle window is trimmed from the recorded
+  /// trip (ended_at = wall-clock time of the last genuine movement).
   static const Duration _idleTimeout = Duration(minutes: 30);
+
+  /// How far (meters) the device must move from the current anchor before
+  /// we count it as genuine movement. Bigger than typical GPS jitter
+  /// (which can spike 15–40m while stationary) so parking drift doesn't
+  /// keep resetting the idle clock.
+  static const double _movementThresholdMeters = 50;
+
   Timer? _idleCheckTimer;
-  DateTime? _lastMovingWaypointTime;
+
+  /// Device wall-clock time (NOT the GPS fix timestamp) of the last
+  /// genuine movement. Using `DateTime.now()` here avoids geolocator's
+  /// `Position.timestamp` clock/zone quirks that previously made the idle
+  /// duration come out negative — which is why auto-stop never fired.
+  DateTime? _lastMovementWallTime;
+
+  /// Reference position used to detect genuine movement. Re-anchored each
+  /// time the device travels more than [_movementThresholdMeters].
+  Position? _idleAnchor;
+
+  /// Number of recorded positions up to (and including) the last genuine
+  /// movement. Used to clip distance/waypoints so the idle tail isn't
+  /// counted toward the trip.
+  int _lastMovingPositionCount = 0;
 
   /// True if the trip was auto-stopped due to idle timeout. UI can use
   /// this to show a badge "DIHENTIKAN OTOMATIS".
@@ -76,8 +137,22 @@ class TripService extends ChangeNotifier {
   bool get autoStopped => _autoStopped;
 
   /// Callback invoked when auto-stop fires. The host widget should show
-  /// the trip summary dialog.
-  void Function(Trip)? onAutoStopped;
+  /// the trip summary dialog, or the "rekaman dibatalkan" dialog if
+  /// `result.discarded` is true.
+  void Function(TripStopResult)? onAutoStopped;
+
+  // ── Validity thresholds ─────────────────────────────────────────────
+  /// Minimum durasi (start → stop) supaya rekaman dianggap valid.
+  /// Trip lebih pendek dari ini dianggap "salah pencet" dan dibuang.
+  static const Duration _minValidDuration = Duration(seconds: 30);
+
+  /// Minimum jarak total (meter) supaya rekaman valid. Mencegah trip
+  /// statis (HP nyala di meja) bocor masuk ke DB dan meracuni prior.
+  static const double _minValidDistanceMeters = 100;
+
+  /// Minimum jumlah waypoint. Sangat kecil = GPS belum dapat fix /
+  /// indoor / langsung di-stop.
+  static const int _minValidWaypointCount = 5;
 
   /// Result of a permission request. Tells the caller whether tracking
   /// will survive screen-off / app-backgrounded.
@@ -169,11 +244,13 @@ class TripService extends ChangeNotifier {
     _flushTimer =
         Timer.periodic(const Duration(seconds: 30), (_) => _flushWaypoints());
 
-    // Idle auto-stop: check every 60s if user has been stationary too long.
-    _lastMovingWaypointTime = DateTime.now();
+    // Idle auto-stop: check every 30s if user has been stationary too long.
+    _lastMovementWallTime = DateTime.now();
+    _idleAnchor = null;
+    _lastMovingPositionCount = 0;
     _autoStopped = false;
     _idleCheckTimer =
-        Timer.periodic(const Duration(seconds: 60), (_) => _checkIdle());
+        Timer.periodic(const Duration(seconds: 30), (_) => _checkIdle());
   }
 
   /// Platform-aware location settings for an active trip.
@@ -232,16 +309,37 @@ class TripService extends ChangeNotifier {
         pos.longitude,
       );
       _distanceMeters += delta;
-      // Only count as "moving" if delta > 30m (filters GPS jitter while
-      // parked). This resets the idle timer.
-      if (delta > 30) {
-        _lastMovingWaypointTime = pos.timestamp;
-      }
-    } else {
-      _lastMovingWaypointTime = pos.timestamp;
     }
 
     _positions.add(pos);
+
+    // ── Idle detection (anchor-based, wall-clock timed) ──
+    // Compare against a fixed anchor instead of the previous fix so that
+    // GPS jitter while parked (which can spike 15–40m between consecutive
+    // fixes) doesn't keep resetting the idle clock. We only count it as
+    // genuine movement once we're more than [_movementThresholdMeters]
+    // from the anchor; then we re-anchor here.
+    final anchor = _idleAnchor;
+    if (anchor == null) {
+      _idleAnchor = pos;
+      _lastMovementWallTime = DateTime.now();
+      _lastMovingPositionCount = _positions.length;
+    } else {
+      final fromAnchor = Geolocator.distanceBetween(
+        anchor.latitude,
+        anchor.longitude,
+        pos.latitude,
+        pos.longitude,
+      );
+      if (fromAnchor > _movementThresholdMeters) {
+        _idleAnchor = pos;
+        // Use the device wall clock, NOT pos.timestamp — geolocator's
+        // timestamp can be in a different clock/zone and made the idle
+        // duration go negative, so auto-stop never triggered.
+        _lastMovementWallTime = DateTime.now();
+        _lastMovingPositionCount = _positions.length;
+      }
+    }
 
     _pendingWaypoints.add(TripWaypoint(
       tripId: _activeTrip!.id,
@@ -251,6 +349,13 @@ class TripService extends ChangeNotifier {
     ));
 
     notifyListeners();
+
+    // Safety net: also evaluate idle on every fix. When the screen is off
+    // or the app is backgrounded, `Timer.periodic` can be throttled or
+    // suspended by the OS, so the 30s idle timer may not fire reliably.
+    // The position stream (kept alive by the Android foreground service /
+    // iOS background mode) is the more dependable wake source.
+    _checkIdle();
   }
 
   Future<void> _flushWaypoints() async {
@@ -265,21 +370,33 @@ class TripService extends ChangeNotifier {
     }
   }
 
-  /// Fired every 60s. If the last significant movement was >30 minutes
-  /// ago, auto-stop the trip with `ended_at` clipped to that last-moving
-  /// timestamp. The 30-minute idle window is NOT counted toward trip
-  /// duration or distance.
+  /// Fired every 30s. If the device hasn't genuinely moved for
+  /// [_idleTimeout] (measured on the wall clock), auto-stop the trip.
+  /// The idle tail is trimmed: distance/waypoints are clipped to the last
+  /// moving position, and `ended_at` is set to that position's timestamp.
   void _checkIdle() {
     if (!isTracking) return;
-    final lastMove = _lastMovingWaypointTime;
+    final lastMove = _lastMovementWallTime;
     if (lastMove == null) return;
     final idleDuration = DateTime.now().difference(lastMove);
     if (idleDuration >= _idleTimeout) {
-      _performAutoStop(lastMove);
+      _performAutoStop();
     }
   }
 
-  Future<void> _performAutoStop(DateTime cutoffTime) async {
+  /// Public hook so the host screen can force an idle evaluation right
+  /// when the app returns to the foreground.
+  ///
+  /// Why this matters: while the app is backgrounded with the screen off
+  /// AND the device is stationary, no new GPS fixes arrive (distanceFilter)
+  /// and the OS can suspend our periodic timer — so the scheduled idle
+  /// check may not run. Calling this on resume guarantees that a trip
+  /// which crossed the idle threshold while we were asleep gets stopped
+  /// immediately, with `ended_at` correctly backdated to the last
+  /// movement (the idle tail is never counted).
+  void checkIdleNow() => _checkIdle();
+
+  Future<void> _performAutoStop() async {
     if (!isTracking) return;
 
     // Cancel streams immediately.
@@ -293,16 +410,61 @@ class TripService extends ChangeNotifier {
     // Flush remaining waypoints.
     await _flushWaypoints();
 
-    // Compute distance only up to cutoff (exclude idle tail).
+    // Clip to the last genuine movement: only count positions up to
+    // [_lastMovingPositionCount]. Everything after that is the idle tail.
+    final clipCount = _lastMovingPositionCount > 0
+        ? _lastMovingPositionCount.clamp(0, _positions.length)
+        : _positions.length;
+
     double clippedDistance = 0;
-    for (int i = 1; i < _positions.length; i++) {
-      if (_positions[i].timestamp.isAfter(cutoffTime)) break;
+    for (int i = 1; i < clipCount; i++) {
       clippedDistance += Geolocator.distanceBetween(
         _positions[i - 1].latitude,
         _positions[i - 1].longitude,
         _positions[i].latitude,
         _positions[i].longitude,
       );
+    }
+
+    // ended_at = wall-clock time of the last genuine movement (idle tail
+    // excluded). This is consistent with how `started_at` is recorded
+    // (DateTime.now()), so the saved duration is correct regardless of
+    // any GPS-timestamp clock quirks.
+    final DateTime cutoffTime =
+        _lastMovementWallTime ?? DateTime.now().subtract(_idleTimeout);
+
+    final clippedWaypointCount = clipCount;
+
+    // Validity check on the *clipped* trip, not the raw stream — kalau
+    // user start → langsung idle 30 menit tanpa pernah bergerak,
+    // rekamannya invalid dan harus dibuang.
+    final clippedDuration =
+        cutoffTime.difference(_activeTrip!.startedAt);
+    final discardReason = _validateTrip(
+      duration: clippedDuration,
+      distanceMeters: clippedDistance,
+      waypointCount: clippedWaypointCount,
+    );
+
+    if (discardReason != TripDiscardReason.none) {
+      try {
+        await _repo.discardTrip(_activeTrip!.id);
+      } catch (_) {
+        // Best-effort: kalau delete gagal, biarkan row jadi "completed
+        // with tiny distance". Lebih baik daripada zombie active trip.
+        try {
+          await _repo.endTrip(
+            tripId: _activeTrip!.id,
+            distanceKm: clippedDistance / 1000.0,
+            endedAt: cutoffTime,
+          );
+        } catch (_) {}
+      }
+      _activeTrip = null;
+      _autoStopped = true;
+      notifyListeners();
+      onAutoStopped?.call(TripStopResult.discarded(discardReason));
+      return;
     }
 
     try {
@@ -321,7 +483,7 @@ class TripService extends ChangeNotifier {
       } catch (_) {
         // Non-fatal: notif gagal != trip teardown gagal.
       }
-      onAutoStopped?.call(ended);
+      onAutoStopped?.call(TripStopResult.saved(ended));
     } catch (_) {
       // If DB update fails, trip stays "active" — user can manually stop
       // next time they open the app.
@@ -329,7 +491,11 @@ class TripService extends ChangeNotifier {
   }
 
   /// Stops tracking, flushes all waypoints, ends trip in Supabase.
-  Future<Trip?> stopTrip() async {
+  ///
+  /// Kalau rekaman tidak lulus validity check (terlalu pendek / kosong /
+  /// salah pencet), trip dibuang dari DB dan hasilnya
+  /// [TripStopResult.discarded] supaya UI bisa kasih dialog yang sesuai.
+  Future<TripStopResult?> stopTrip() async {
     if (!isTracking) return null;
 
     _positionSub?.cancel();
@@ -342,14 +508,63 @@ class TripService extends ChangeNotifier {
     // Flush remaining waypoints
     await _flushWaypoints();
 
+    final tripId = _activeTrip!.id;
+    final startedAt = _activeTrip!.startedAt;
+    final now = DateTime.now();
+    final discardReason = _validateTrip(
+      duration: now.difference(startedAt),
+      distanceMeters: _distanceMeters,
+      waypointCount: _positions.length,
+    );
+
+    if (discardReason != TripDiscardReason.none) {
+      try {
+        await _repo.discardTrip(tripId);
+      } catch (_) {
+        // Fallback: kalau delete gagal (network), tetap close supaya
+        // trip tidak nyangkut active. Distance & ended_at di-set;
+        // history akan tampil tapi kontribusinya minim.
+        try {
+          await _repo.endTrip(
+            tripId: tripId,
+            distanceKm: distanceKm,
+            endedAt: now,
+          );
+        } catch (_) {}
+      }
+      _activeTrip = null;
+      notifyListeners();
+      return TripStopResult.discarded(discardReason);
+    }
+
     final ended = await _repo.endTrip(
-      tripId: _activeTrip!.id,
+      tripId: tripId,
       distanceKm: distanceKm,
     );
 
     _activeTrip = ended;
     notifyListeners();
-    return ended;
+    return TripStopResult.saved(ended);
+  }
+
+  /// Centralized validity rule. Returns [TripDiscardReason.none] if
+  /// the trip should be persisted, otherwise the reason it should be
+  /// thrown away.
+  TripDiscardReason _validateTrip({
+    required Duration duration,
+    required double distanceMeters,
+    required int waypointCount,
+  }) {
+    if (duration < _minValidDuration) {
+      return TripDiscardReason.tooShortDuration;
+    }
+    if (distanceMeters < _minValidDistanceMeters) {
+      return TripDiscardReason.tooShortDistance;
+    }
+    if (waypointCount < _minValidWaypointCount) {
+      return TripDiscardReason.tooFewWaypoints;
+    }
+    return TripDiscardReason.none;
   }
 
   @override

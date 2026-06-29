@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../app/theme.dart';
 import '../data/models.dart';
@@ -82,8 +83,8 @@ class _Placeholder extends StatelessWidget {
           ),
           Icon(
             isMotor
-                ? Icons.two_wheeler_rounded
-                : Icons.directions_car_filled_rounded,
+                ? PhosphorIconsRegular.motorcycle
+                : PhosphorIconsRegular.car,
             size: 40,
             color: AppEditorial.butterDeep,
           ),

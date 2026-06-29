@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme.dart';
+import 'sign_in_page.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -113,16 +115,15 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: Text(
-          'PASSWORD DIUBAH',
-          style: AppEditorial.mono(
-            fontSize: 14,
+          'Password diubah',
+          style: AppEditorial.heading(
+            fontSize: 19,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
           ),
         ),
         content: Text(
           'Silakan masuk dengan password baru.',
-          style: AppEditorial.sans(fontSize: 13),
+          style: AppEditorial.sans(fontSize: 13.5, height: 1.5),
         ),
         actions: [
           FilledButton(
@@ -130,7 +131,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               Navigator.of(ctx).pop();
               Navigator.of(context).pop();
             },
-            child: const Text('KEMBALI KE LOGIN'),
+            child: const Text('Kembali ke masuk'),
           ),
         ],
       ),
@@ -143,7 +144,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       backgroundColor: AppEditorial.canvas,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(PhosphorIconsRegular.arrowLeft),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -152,39 +153,28 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      Text('STEP ${_step.index + 1}/3',
-                          style: AppEditorial.mono(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppEditorial.butterDeep,
-                            letterSpacing: 0.6,
-                          )),
-                      const SizedBox(width: 10),
-                      Container(
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                              color: AppEditorial.butter,
-                              shape: BoxShape.circle)),
-                      const SizedBox(width: 10),
-                      Text('RESET PASSWORD',
-                          style: AppEditorial.eyebrow()),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                  const AuthBrandMark(),
+                  const SizedBox(height: 28),
                   _StepHeader(step: _step, email: _submittedEmail),
                   const SizedBox(height: 18),
-                  _StepDots(currentStep: _step),
-                  const SizedBox(height: 28),
-                  Container(height: 1, color: AppEditorial.ink),
-                  const SizedBox(height: 24),
-                  _buildStepContent(),
+                  _StepProgress(currentStep: _step),
+                  const SizedBox(height: 22),
+
+                  // Form card
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppEditorial.cream,
+                      borderRadius:
+                          BorderRadius.circular(AppEditorial.rCard),
+                      boxShadow: AppEditorial.softShadow,
+                    ),
+                    child: _buildStepContent(),
+                  ),
                 ],
               ),
             ),
@@ -214,24 +204,22 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.email],
-          style: AppEditorial.mono(
-              fontSize: 15, fontWeight: FontWeight.w500),
           onSubmitted: (_) => _busy ? null : _sendOtp(),
           decoration: const InputDecoration(
-            labelText: 'EMAIL',
+            labelText: 'Email',
             hintText: 'contoh@email.com',
           ),
         ),
         if (_error != null) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           _ErrorBox(message: _error!),
         ],
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         FilledButton(
           onPressed: _busy ? null : _sendOtp,
           child: _busy
               ? _btnSpinner()
-              : const Text('KIRIM KODE VERIFIKASI →'),
+              : const Text('Kirim kode verifikasi'),
         ),
       ],
     );
@@ -248,33 +236,33 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           maxLength: 6,
           textAlign: TextAlign.center,
           style: AppEditorial.mono(
-            fontSize: 28,
+            fontSize: 26,
             fontWeight: FontWeight.w700,
             letterSpacing: 8,
           ),
           onSubmitted: (_) => _busy ? null : _verifyOtp(),
           decoration: const InputDecoration(
-            labelText: 'KODE 6 DIGIT',
-            hintText: '------',
+            labelText: 'Kode 6 digit',
+            hintText: '••••••',
             counterText: '',
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Center(
           child: TextButton.icon(
             onPressed: _busy ? null : _sendOtp,
-            icon: const Icon(Icons.refresh_rounded, size: 14),
-            label: const Text('KIRIM ULANG KODE'),
+            icon: const Icon(PhosphorIconsRegular.arrowClockwise, size: 16),
+            label: const Text('Kirim ulang kode'),
           ),
         ),
         if (_error != null) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _ErrorBox(message: _error!),
         ],
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
         FilledButton(
           onPressed: _busy ? null : _verifyOtp,
-          child: _busy ? _btnSpinner() : const Text('VERIFIKASI KODE →'),
+          child: _busy ? _btnSpinner() : const Text('Verifikasi kode'),
         ),
       ],
     );
@@ -288,67 +276,63 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           controller: _newPassCtrl,
           obscureText: _obscureNew,
           textInputAction: TextInputAction.next,
-          style: AppEditorial.mono(
-              fontSize: 15, fontWeight: FontWeight.w500),
           decoration: InputDecoration(
-            labelText: 'PASSWORD BARU',
+            labelText: 'Password baru',
             hintText: 'Min. 8 karakter',
             suffixIcon: IconButton(
               onPressed: () => setState(() => _obscureNew = !_obscureNew),
               icon: Icon(
                 _obscureNew
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
+                    ? PhosphorIconsRegular.eyeSlash
+                    : PhosphorIconsRegular.eye,
                 color: AppEditorial.inkSoft,
-                size: 18,
+                size: 20,
               ),
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         TextField(
           controller: _confirmPassCtrl,
           obscureText: _obscureConfirm,
           textInputAction: TextInputAction.done,
-          style: AppEditorial.mono(
-              fontSize: 15, fontWeight: FontWeight.w500),
           onSubmitted: (_) => _busy ? null : _updatePassword(),
           decoration: InputDecoration(
-            labelText: 'KONFIRMASI PASSWORD',
+            labelText: 'Konfirmasi password',
             suffixIcon: IconButton(
               onPressed: () =>
                   setState(() => _obscureConfirm = !_obscureConfirm),
               icon: Icon(
                 _obscureConfirm
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
+                    ? PhosphorIconsRegular.eyeSlash
+                    : PhosphorIconsRegular.eye,
                 color: AppEditorial.inkSoft,
-                size: 18,
+                size: 20,
               ),
             ),
           ),
         ),
         if (_error != null) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           _ErrorBox(message: _error!),
         ],
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         FilledButton(
           onPressed: _busy ? null : _updatePassword,
           child: _busy
               ? _btnSpinner()
-              : const Text('SIMPAN PASSWORD BARU →'),
+              : const Text('Simpan password baru'),
         ),
       ],
     );
   }
 
   Widget _btnSpinner() => const SizedBox(
-        height: 16,
-        width: 16,
+        height: 18,
+        width: 18,
         child: CircularProgressIndicator(
           strokeWidth: 2,
-          color: AppEditorial.canvas,
+          color: Color(0xFFFFFFFF),
         ),
       );
 }
@@ -362,15 +346,15 @@ class _StepHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final (title, subtitle) = switch (step) {
       _Step.email => (
-          'Lupa password.',
+          'Lupa password',
           'Masukkan email akun, kami akan kirim kode verifikasi.',
         ),
       _Step.otp => (
-          'Cek email.',
+          'Cek email',
           'Kode 6 digit dikirim ke ${email ?? ''}.',
         ),
       _Step.newPassword => (
-          'Buat password baru.',
+          'Buat password baru',
           'Password kuat dan mudah diingat.',
         ),
     };
@@ -379,18 +363,19 @@ class _StepHeader extends StatelessWidget {
       children: [
         Text(
           title,
-          style: AppEditorial.mono(
+          style: AppEditorial.heading(
             fontSize: 26,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.4,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Text(
           subtitle,
           style: AppEditorial.sans(
-            fontSize: 13,
+            fontSize: 13.5,
             color: AppEditorial.inkSoft,
+            height: 1.5,
           ),
         ),
       ],
@@ -398,8 +383,8 @@ class _StepHeader extends StatelessWidget {
   }
 }
 
-class _StepDots extends StatelessWidget {
-  const _StepDots({required this.currentStep});
+class _StepProgress extends StatelessWidget {
+  const _StepProgress({required this.currentStep});
   final _Step currentStep;
 
   @override
@@ -410,8 +395,11 @@ class _StepDots extends StatelessWidget {
         return Expanded(
           child: Container(
             margin: EdgeInsets.only(right: i == 2 ? 0 : 6),
-            height: 2,
-            color: isActive ? AppEditorial.ink : AppEditorial.hairline,
+            height: 6,
+            decoration: BoxDecoration(
+              color: isActive ? AppEditorial.brand : AppEditorial.hairline,
+              borderRadius: BorderRadius.circular(AppEditorial.rPill),
+            ),
           ),
         );
       }),
@@ -426,23 +414,25 @@ class _ErrorBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: AppEditorial.rust, width: 1),
+        color: AppEditorial.rustSoft,
         borderRadius: BorderRadius.circular(AppEditorial.rTiny),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppEditorial.rust, size: 16),
-          const SizedBox(width: 8),
+          const Icon(PhosphorIconsRegular.warningCircle,
+              color: AppEditorial.rust, size: 18),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
               style: AppEditorial.sans(
                 fontSize: 12.5,
+                fontWeight: FontWeight.w500,
                 color: AppEditorial.rust,
+                height: 1.4,
               ),
             ),
           ),

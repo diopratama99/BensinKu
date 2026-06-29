@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:postgrest/postgrest.dart';
 
 import '../../app/theme.dart';
@@ -156,7 +157,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
           leading: inOnboarding
               ? null
               : IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded),
+                  icon: const Icon(PhosphorIconsRegular.arrowLeft),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
           automaticallyImplyLeading: !inOnboarding,
@@ -166,7 +167,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
         builder: (context, snap) {
           if (snap.hasError) {
             return _CenteredMessage(
-              title: 'ERROR',
+              title: 'Terjadi kesalahan',
               subtitle: snap.error.toString(),
             );
           }
@@ -188,71 +189,93 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
 
           return SafeArea(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
               children: [
-                Row(
-                  children: [
-                    Text(
-                      widget.goHomeOnComplete
-                          ? 'STEP 02/02 · KENDARAAN'
-                          : 'TAMBAH KENDARAAN',
-                      style: AppEditorial.mono(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppEditorial.butterDeep,
-                        letterSpacing: 0.6,
+                if (widget.goHomeOnComplete)
+                  const _OnbStepHeader(
+                    label: 'Kendaraan',
+                    step: 2,
+                    total: 2,
+                  )
+                else
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: AppEditorial.brandTint,
+                          borderRadius:
+                              BorderRadius.circular(AppEditorial.rPill),
+                        ),
+                        child: Text(
+                          'Tambah kendaraan',
+                          style: AppEditorial.sans(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppEditorial.brandDeep,
+                          ),
+                        ),
                       ),
+                    ],
+                  ),
+                const SizedBox(height: 22),
+                // Hero illustration di kartu putih lembut
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppEditorial.cream,
+                    borderRadius:
+                        BorderRadius.circular(AppEditorial.rCard),
+                    boxShadow: AppEditorial.softShadow,
+                  ),
+                  child: AspectRatio(
+                    aspectRatio: 1080 / 800,
+                    child: Image.asset(
+                      'assets/illustrations/onboarding_tank.png',
+                      fit: BoxFit.contain,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                // Hero illustration
-                AspectRatio(
-                  aspectRatio: 1080 / 800,
-                  child: Image.asset(
-                    'assets/illustrations/onboarding_tank.png',
-                    fit: BoxFit.contain,
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 22),
                 Text(
                   'Tambah kendaraan harianmu.',
-                  style: AppEditorial.mono(
+                  style: AppEditorial.heading(
                     fontSize: 28,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: -0.5,
                     height: 1.15,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(
-                  'Maksimal 1 motor + 1 mobil. Cukup untuk pemakaian harian.',
+                  'Maksimal 1 motor dan 1 mobil. Cukup untuk pemakaian harian.',
                   style: AppEditorial.sans(
-                    fontSize: 13,
+                    fontSize: 14,
                     color: AppEditorial.inkSoft,
                   ),
                 ),
                 const SizedBox(height: 28),
-                Container(height: 1, color: AppEditorial.ink),
-                const SizedBox(height: 24),
 
-                Text('JENIS', style: AppEditorial.eyebrow()),
+                const _VSectionLabel('Jenis kendaraan'),
                 const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
                       child: _TypePill(
-                        label: 'MOTOR',
+                        label: 'Motor',
+                        icon: PhosphorIconsRegular.motorcycle,
                         active: _type == VehicleType.motor,
                         disabled: hasMotor,
                         onTap: () =>
                             setState(() => _type = VehicleType.motor),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: _TypePill(
-                        label: 'MOBIL',
+                        label: 'Mobil',
+                        icon: PhosphorIconsRegular.car,
                         active: _type == VehicleType.mobil,
                         disabled: hasMobil,
                         onTap: () =>
@@ -266,14 +289,14 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
                 TextField(
                   controller: _nameController,
                   enabled: canAdd,
-                  style: AppEditorial.mono(
+                  style: AppEditorial.sans(
                       fontSize: 16, fontWeight: FontWeight.w600),
                   decoration: const InputDecoration(
-                    labelText: 'NAMA KENDARAAN',
+                    labelText: 'Nama kendaraan',
                     hintText: 'Vario / Avanza',
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 TextField(
                   controller: _capacityController,
                   enabled: canAdd,
@@ -281,7 +304,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
                   style: AppEditorial.mono(
                       fontSize: 16, fontWeight: FontWeight.w600),
                   decoration: const InputDecoration(
-                    labelText: 'KAPASITAS TANKI',
+                    labelText: 'Kapasitas tanki',
                     hintText: '5 atau 40',
                     suffixText: 'L',
                   ),
@@ -307,23 +330,7 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
 
                 if (_error != null) ...[
                   const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      border:
-                          Border.all(color: AppEditorial.rust, width: 1),
-                      borderRadius:
-                          BorderRadius.circular(AppEditorial.rTiny),
-                    ),
-                    child: Text(
-                      _error!,
-                      style: AppEditorial.sans(
-                        fontSize: 12.5,
-                        color: AppEditorial.rust,
-                      ),
-                    ),
-                  ),
+                  _ErrorNote(_error!),
                 ],
                 const SizedBox(height: 24),
                 FilledButton(
@@ -339,8 +346,8 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
                           ),
                         )
                       : Text(!canAdd
-                          ? 'LIMIT TERCAPAI'
-                          : 'SIMPAN & LANJUT →'),
+                          ? 'Batas tercapai'
+                          : 'Simpan & lanjut'),
                 ),
               ],
             ),
@@ -355,48 +362,180 @@ class _AddVehiclePageState extends State<AddVehiclePage> {
 class _TypePill extends StatelessWidget {
   const _TypePill({
     required this.label,
+    required this.icon,
     required this.active,
     required this.disabled,
     required this.onTap,
   });
 
   final String label;
+  final IconData icon;
   final bool active;
   final bool disabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = disabled
-        ? AppEditorial.inkMuted
-        : (active ? AppEditorial.canvas : AppEditorial.ink);
-    final bg = disabled
-        ? AppEditorial.cream
-        : (active ? AppEditorial.ink : AppEditorial.canvas);
+    final Color bg;
+    final Color fg;
+    if (disabled) {
+      bg = AppEditorial.canvasSoft;
+      fg = AppEditorial.inkMuted;
+    } else if (active) {
+      bg = AppEditorial.brand;
+      fg = AppEditorial.ink;
+    } else {
+      bg = AppEditorial.canvasSoft;
+      fg = AppEditorial.ink;
+    }
 
     return GestureDetector(
       onTap: disabled ? null : onTap,
       child: Container(
-        height: 56,
+        height: 84,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: bg,
-          border: Border.all(
-            color: disabled ? AppEditorial.hairline : AppEditorial.ink,
-            width: 1,
-          ),
           borderRadius: BorderRadius.circular(AppEditorial.rTiny),
         ),
-        child: Text(
-          disabled ? '$label (ADA)' : label,
-          style: AppEditorial.mono(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: color,
-            letterSpacing: 0.6,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 26, color: fg),
+            const SizedBox(height: 8),
+            Text(
+              disabled ? '$label · sudah ada' : label,
+              style: AppEditorial.sans(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: fg,
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/// Label section pada form kendaraan — judul ringkas sentence case.
+class _VSectionLabel extends StatelessWidget {
+  const _VSectionLabel(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: AppEditorial.heading(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
+      ),
+    );
+  }
+}
+
+/// Catatan error lembut — fill rustSoft, tanpa border keras.
+class _ErrorNote extends StatelessWidget {
+  const _ErrorNote(this.message);
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppEditorial.rustSoft,
+        borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(PhosphorIconsRegular.warningCircle,
+              size: 18, color: AppEditorial.rust),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: AppEditorial.sans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppEditorial.rust,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Header langkah onboarding — eyebrow + progress bar brand.
+class _OnbStepHeader extends StatelessWidget {
+  const _OnbStepHeader({
+    required this.label,
+    required this.step,
+    required this.total,
+  });
+
+  final String label;
+  final int step;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppEditorial.brandTint,
+                borderRadius: BorderRadius.circular(AppEditorial.rPill),
+              ),
+              child: Text(
+                'Langkah $step dari $total',
+                style: AppEditorial.sans(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppEditorial.brandDeep,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: AppEditorial.sans(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppEditorial.inkSoft,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: List.generate(total, (i) {
+            final filled = i < step;
+            return Expanded(
+              child: Container(
+                margin: EdgeInsets.only(right: i == total - 1 ? 0 : 6),
+                height: 5,
+                decoration: BoxDecoration(
+                  color:
+                      filled ? AppEditorial.brand : AppEditorial.hairline,
+                  borderRadius: BorderRadius.circular(AppEditorial.rPill),
+                ),
+              ),
+            );
+          }),
+        ),
+      ],
     );
   }
 }
@@ -417,7 +556,7 @@ class _CenteredMessage extends StatelessWidget {
           children: [
             Text(
               title,
-              style: AppEditorial.mono(
+              style: AppEditorial.heading(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
@@ -481,38 +620,42 @@ class _DetailMesinSection extends StatelessWidget {
       children: [
         InkWell(
           onTap: enabled ? onExpandToggle : null,
+          borderRadius: BorderRadius.circular(AppEditorial.rTiny),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
-                Text('DETAIL MESIN',
-                    style: AppEditorial.eyebrow()),
+                Text('Detail mesin',
+                    style: AppEditorial.heading(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    )),
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 5, vertical: 1),
+                      horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppEditorial.rust.withValues(alpha: 0.15),
+                    color: AppEditorial.brandTint,
                     borderRadius:
-                        BorderRadius.circular(AppEditorial.rTiny),
+                        BorderRadius.circular(AppEditorial.rPill),
                   ),
                   child: Text(
-                    'WAJIB',
-                    style: AppEditorial.mono(
-                      fontSize: 8.5,
+                    'Wajib',
+                    style: AppEditorial.sans(
+                      fontSize: 10.5,
                       fontWeight: FontWeight.w700,
-                      color: AppEditorial.rust,
-                      letterSpacing: 0.6,
+                      color: AppEditorial.brandDeep,
                     ),
                   ),
                 ),
                 const Spacer(),
                 Icon(
                   expanded
-                      ? Icons.expand_less_rounded
-                      : Icons.expand_more_rounded,
-                  size: 20,
-                  color: AppEditorial.ink,
+                      ? PhosphorIconsRegular.caretUp
+                      : PhosphorIconsRegular.caretDown,
+                  size: 22,
+                  color: AppEditorial.inkSoft,
                 ),
               ],
             ),
@@ -522,8 +665,9 @@ class _DetailMesinSection extends StatelessWidget {
         Text(
           'Diperlukan untuk prediksi konsumsi yang akurat sejak awal.',
           style: AppEditorial.sans(
-            fontSize: 11.5,
+            fontSize: 12.5,
             color: AppEditorial.inkSoft,
+            height: 1.4,
           ),
         ),
         if (expanded) ...[
@@ -539,7 +683,7 @@ class _DetailMesinSection extends StatelessWidget {
                   style: AppEditorial.mono(
                       fontSize: 16, fontWeight: FontWeight.w600),
                   decoration: const InputDecoration(
-                    labelText: 'CC MESIN',
+                    labelText: 'CC mesin',
                     hintText: '125 atau 1500',
                     suffixText: 'cc',
                   ),
@@ -554,41 +698,41 @@ class _DetailMesinSection extends StatelessWidget {
                   style: AppEditorial.mono(
                       fontSize: 16, fontWeight: FontWeight.w600),
                   decoration: const InputDecoration(
-                    labelText: 'TAHUN',
+                    labelText: 'Tahun',
                     hintText: '2020',
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           // Make/model bebas (opsional — informational only)
           TextField(
             controller: makeModelController,
             enabled: enabled,
             textCapitalization: TextCapitalization.words,
-            style: AppEditorial.mono(
+            style: AppEditorial.sans(
                 fontSize: 16, fontWeight: FontWeight.w600),
             decoration: const InputDecoration(
-              labelText: 'MERK / MODEL · OPSIONAL',
+              labelText: 'Merk / model · opsional',
               hintText: 'Honda Vario 125',
             ),
           ),
           if (isMobil) ...[
             const SizedBox(height: 22),
-            Text('TIPE BODI', style: AppEditorial.eyebrow()),
-            const SizedBox(height: 8),
+            const _VSectionLabel('Tipe bodi'),
+            const SizedBox(height: 10),
             _EnumPicker<BodyType>(
               enabled: enabled,
               value: bodyType,
               options: BodyType.values,
-              labelOf: (v) => v.label.toUpperCase(),
+              labelOf: (v) => v.label,
               onChange: onBodyTypeChange,
             ),
           ],
           const SizedBox(height: 22),
-          Text('TRANSMISI', style: AppEditorial.eyebrow()),
-          const SizedBox(height: 8),
+          const _VSectionLabel('Transmisi'),
+          const SizedBox(height: 10),
           _EnumPicker<Transmission>(
             enabled: enabled,
             value: transmission,
@@ -626,40 +770,37 @@ class _EnumPicker<T> extends StatelessWidget {
       runSpacing: 8,
       children: options.map((opt) {
         final selected = value == opt;
+        final Color bg;
+        final Color fg;
+        if (!enabled) {
+          bg = AppEditorial.canvasSoft;
+          fg = AppEditorial.inkMuted;
+        } else if (selected) {
+          bg = AppEditorial.brand;
+          fg = AppEditorial.ink;
+        } else {
+          bg = AppEditorial.canvasSoft;
+          fg = AppEditorial.ink;
+        }
         return GestureDetector(
           onTap: enabled
               ? () => onChange(selected ? null : opt)
               : null,
           child: Container(
             padding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 8),
+                horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: !enabled
-                  ? AppEditorial.cream
-                  : (selected
-                      ? AppEditorial.ink
-                      : AppEditorial.canvas),
-              border: Border.all(
-                color: !enabled
-                    ? AppEditorial.hairline
-                    : AppEditorial.ink,
-                width: 1,
-              ),
+              color: bg,
               borderRadius:
-                  BorderRadius.circular(AppEditorial.rTiny),
+                  BorderRadius.circular(AppEditorial.rPill),
             ),
             child: Text(
               labelOf(opt),
-              style: AppEditorial.mono(
-                fontSize: 12,
+              style: AppEditorial.sans(
+                fontSize: 13,
                 fontWeight:
-                    selected ? FontWeight.w700 : FontWeight.w500,
-                color: !enabled
-                    ? AppEditorial.inkMuted
-                    : (selected
-                        ? AppEditorial.canvas
-                        : AppEditorial.ink),
-                letterSpacing: 0.4,
+                    selected ? FontWeight.w700 : FontWeight.w600,
+                color: fg,
               ),
             ),
           ),

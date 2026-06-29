@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme.dart';
 import '../../data/models.dart';
+import '../../data/repository.dart';
 import '../../services/home_widget_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/widget_launch_intent.dart';
+import '../../widgets/user_avatar.dart';
 import '../trip/trip_map_screen.dart';
 import 'add_refuel_tab.dart';
 import 'analytics_tab.dart';
-import 'history_tab.dart';
+import 'maintenance_tab.dart';
 import 'profile_tab.dart';
 import 'receipt_processing_sheet.dart';
 import 'summary_tab.dart';
@@ -39,6 +43,18 @@ class _HomeShellState extends State<HomeShell>
     // Push a fresh widget snapshot on app open so values are current
     // even if the user just edited something in another session.
     HomeWidgetService.instance.refresh();
+    // Surface any due/overdue maintenance reminders on open (best-effort).
+    _checkMaintenanceReminders();
+  }
+
+  Future<void> _checkMaintenanceReminders() async {
+    try {
+      final repo = SupabaseRepository.ofDefaultClient();
+      final items = await repo.listMaintenanceItems();
+      await NotificationService.instance.notifyMaintenanceDue(items);
+    } catch (_) {
+      // Non-fatal — reminders are opportunistic.
+    }
   }
 
   @override
@@ -55,7 +71,25 @@ class _HomeShellState extends State<HomeShell>
     // Rute tab + auto-start trip when warm-launched.
     if (state == AppLifecycleState.resumed) {
       _maybeJumpFromWidget();
+      // Another app sharing this Supabase instance may have changed the
+      // display name or avatar while we were backgrounded. Pull fresh
+      // user metadata from the server, then bust the image cache so the
+      // latest photo + name show up here too.
+      _refreshUserAndAvatar();
     }
+  }
+
+  Future<void> _refreshUserAndAvatar() async {
+    try {
+      // Re-fetch the user so `userMetadata` (name, avatar_updated_at)
+      // reflects edits made in other apps. Local session is cached
+      // otherwise and won't see cross-app changes.
+      await Supabase.instance.client.auth.getUser();
+    } catch (_) {
+      // Offline / token issue — fall back to a local cache-bust anyway.
+    }
+    UserAvatar.bumpCacheBust();
+    if (mounted) setState(() {});
   }
 
   Future<void> _maybeJumpFromWidget() async {
@@ -185,24 +219,32 @@ class _HomeShellState extends State<HomeShell>
             children: [
               Center(
                 child: Container(
-                  width: 36,
-                  height: 3,
-                  color: AppEditorial.hairline,
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppEditorial.hairline,
+                    borderRadius: BorderRadius.circular(AppEditorial.rPill),
+                  ),
                 ),
               ),
               const SizedBox(height: 18),
-              Text('SUMBER FOTO', style: AppEditorial.eyebrow()),
+              Text('Sumber Foto',
+                  style: AppEditorial.heading(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  )),
               const SizedBox(height: 14),
               Container(height: 1, color: AppEditorial.hairlineSoft),
               _SourceTile(
-                icon: Icons.photo_camera_outlined,
+                icon: PhosphorIconsRegular.camera,
                 title: 'Ambil foto baru',
                 subtitle: 'Foto langsung struk SPBU',
                 onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
               ),
               Container(height: 1, color: AppEditorial.hairlineSoft),
               _SourceTile(
-                icon: Icons.image_outlined,
+                icon: PhosphorIconsRegular.image,
                 title: 'Pilih dari galeri',
                 subtitle: 'Foto struk yang sudah ada',
                 onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
@@ -224,11 +266,13 @@ class _HomeShellState extends State<HomeShell>
 
   @override
   Widget build(BuildContext context) {
+    // Tab index → IndexedStack child index.
+    // Nav layout: 0=Beranda 1=Maintenance 2=(+) 3=Analisa 4=Rute
     final stackIndex = switch (_index) {
-      0 => 0,
-      1 => 1,
-      3 => 2,
-      4 => 3,
+      0 => 0, // Beranda
+      1 => 1, // Maintenance
+      3 => 2, // Analisa (now also hosts history)
+      4 => 3, // Rute
       _ => 0,
     };
 
@@ -241,23 +285,26 @@ class _HomeShellState extends State<HomeShell>
       child: Scaffold(
         backgroundColor: AppEditorial.canvas,
         extendBody: true,
-        appBar: _buildAppBar(),
+        appBar: _index == 0 ? null : _buildAppBar(),
         body: IndexedStack(
           index: stackIndex,
           children: [
             SummaryTab(
               key: ValueKey('summary-${_refreshCounters[0]}'),
               onGoToHistory: () => setState(() {
-                _index = 3;
+                _index = 3; // Analisa hosts history now
                 _refreshCounters[3] = (_refreshCounters[3] ?? 0) + 1;
               }),
               onGoToProfile: _openProfile,
+              onAddFuel: _openAddActions,
+              onGoToAnalytics: () => _onTabTapped(3),
+              onGoToMaintenance: () => _onTabTapped(1),
+            ),
+            MaintenanceTab(
+              key: ValueKey('maintenance-${_refreshCounters[1]}'),
             ),
             AnalyticsTab(
-              key: ValueKey('analytics-${_refreshCounters[1]}'),
-            ),
-            HistoryTab(
-              key: ValueKey('history-${_refreshCounters[3]}'),
+              key: ValueKey('analytics-${_refreshCounters[3]}'),
             ),
             const TripMapScreen(),
           ],
@@ -270,70 +317,35 @@ class _HomeShellState extends State<HomeShell>
   // ── App bar (compact masthead, NOT giant italic) ──────────────────────
 
   PreferredSizeWidget _buildAppBar() {
-    final now = DateTime.now();
-    final dateStr =
-        DateFormat('d.MM.yy', 'id_ID').format(now);
-    final dayCode =
-        DateFormat('EEE', 'id_ID').format(now).toUpperCase();
-
     final pageName = switch (_index) {
       0 => 'BERANDA',
-      1 => 'ANALISA',
-      3 => 'ARSIP',
+      1 => 'PERAWATAN',
+      3 => 'ANALISA',
       4 => 'RUTE',
       _ => 'BERANDA',
     };
 
+    final pageTitle = pageName.substring(0, 1) +
+        pageName.substring(1).toLowerCase();
+
     return PreferredSize(
-      preferredSize: const Size.fromHeight(64),
+      preferredSize: const Size.fromHeight(54),
       child: SafeArea(
         bottom: false,
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
-              child: Row(
-                children: [
-                  Text(
-                    pageName,
-                    style: AppEditorial.mono(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '$dayCode $dateStr',
-                    style: AppEditorial.mono(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: AppEditorial.inkSoft,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  if (_index == 0)
-                    GestureDetector(
-                      onTap: _openProfile,
-                      child: Container(
-                        height: 30,
-                        width: 30,
-                        decoration: BoxDecoration(
-                          color: AppEditorial.cream,
-                          border: Border.all(
-                              color: AppEditorial.hairline, width: 1),
-                          borderRadius: BorderRadius.circular(
-                              AppEditorial.rTiny),
-                        ),
-                        child: const Icon(Icons.person_outline_rounded,
-                            color: AppEditorial.ink, size: 16),
-                      ),
-                    ),
-                ],
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          child: Row(
+            children: [
+              Text(
+                pageTitle,
+                style: AppEditorial.heading(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.6,
+                ),
               ),
-            ),
-            Container(height: 1, color: AppEditorial.ink),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -343,8 +355,8 @@ class _HomeShellState extends State<HomeShell>
 
   Widget _buildBottomNav() {
     const barHeight = 72.0;
-    const liftOverhang = 12.0;
-    const addButtonSize = 64.0;
+    const liftOverhang = 16.0;
+    const addButtonSize = 76.0;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     // Total widget height: bar + how far the FAB pokes above + tiny pad
@@ -365,11 +377,18 @@ class _HomeShellState extends State<HomeShell>
             // bar height + bottom safe-area, painted in canvas
             height: barHeight + bottomInset,
             child: Container(
-              decoration: const BoxDecoration(
-                color: AppEditorial.canvas,
-                border: Border(
-                  top: BorderSide(color: AppEditorial.ink, width: 1),
+              decoration: BoxDecoration(
+                color: AppEditorial.canvasSoft,
+                border: const Border(
+                  top: BorderSide(color: AppEditorial.hairlineSoft, width: 1),
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppEditorial.ink.withValues(alpha: 0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
               ),
               child: SafeArea(
                 top: false,
@@ -383,8 +402,8 @@ class _HomeShellState extends State<HomeShell>
                           child: _NavItem(
                             index: 0,
                             currentIndex: _index,
-                            icon: Icons.home_outlined,
-                            iconActive: Icons.home_rounded,
+                            icon: PhosphorIconsRegular.house,
+                            iconActive: PhosphorIconsRegular.house,
                             label: 'BERANDA',
                             onTap: _onTabTapped,
                           ),
@@ -393,9 +412,9 @@ class _HomeShellState extends State<HomeShell>
                           child: _NavItem(
                             index: 1,
                             currentIndex: _index,
-                            icon: Icons.show_chart_rounded,
-                            iconActive: Icons.show_chart_rounded,
-                            label: 'ANALISA',
+                            icon: PhosphorIconsRegular.wrench,
+                            iconActive: PhosphorIconsRegular.wrench,
+                            label: 'PERAWATAN',
                             onTap: _onTabTapped,
                           ),
                         ),
@@ -405,9 +424,9 @@ class _HomeShellState extends State<HomeShell>
                           child: _NavItem(
                             index: 3,
                             currentIndex: _index,
-                            icon: Icons.receipt_long_outlined,
-                            iconActive: Icons.receipt_long_rounded,
-                            label: 'ARSIP',
+                            icon: PhosphorIconsRegular.chartLine,
+                            iconActive: PhosphorIconsRegular.chartLine,
+                            label: 'ANALISA',
                             onTap: _onTabTapped,
                           ),
                         ),
@@ -415,8 +434,8 @@ class _HomeShellState extends State<HomeShell>
                           child: _NavItem(
                             index: 4,
                             currentIndex: _index,
-                            icon: Icons.place_outlined,
-                            iconActive: Icons.place_rounded,
+                            icon: PhosphorIconsRegular.mapPin,
+                            iconActive: PhosphorIconsRegular.mapPin,
                             label: 'RUTE',
                             onTap: _onTabTapped,
                           ),
@@ -517,15 +536,15 @@ class _NavItem extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 3),
               Text(
-                label,
-                style: AppEditorial.mono(
-                  fontSize: 9.5,
+                label.substring(0, 1) + label.substring(1).toLowerCase(),
+                style: AppEditorial.heading(
+                  fontSize: 10.5,
                   fontWeight:
                       selected ? FontWeight.w700 : FontWeight.w500,
                   color: labelColor,
-                  letterSpacing: 0.6,
+                  letterSpacing: 0,
                 ),
               ),
             ],
@@ -549,9 +568,6 @@ class _AddButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Halo ring trick: the canvas-colored outer ring blends into the bar
-    // background, so the section of the top hairline behind the FAB is
-    // visually erased without us splitting the divider.
     return Material(
       color: Colors.transparent,
       shape: const CircleBorder(),
@@ -559,23 +575,16 @@ class _AddButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
-        splashColor: AppEditorial.canvas.withValues(alpha: 0.18),
-        highlightColor: AppEditorial.canvas.withValues(alpha: 0.06),
+        splashColor: AppEditorial.ink.withValues(alpha: 0.10),
+        highlightColor: AppEditorial.ink.withValues(alpha: 0.04),
         child: Container(
           width: size,
           height: size,
           decoration: BoxDecoration(
-            color: AppEditorial.canvas, // halo (matches bar bg)
+            color: AppEditorial.canvas, // halo blends with bar bg
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppEditorial.butterDeep.withValues(alpha: 0.30),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
           ),
-          padding: const EdgeInsets.all(4), // halo thickness
+          padding: const EdgeInsets.all(5), // breathing ring
           alignment: Alignment.center,
           child: AnimatedRotation(
             turns: isOpen ? 0.125 : 0,
@@ -583,15 +592,21 @@ class _AddButton extends StatelessWidget {
             curve: Curves.easeOutBack,
             child: Container(
               decoration: BoxDecoration(
-                color: isOpen ? AppEditorial.canvas : AppEditorial.butter,
+                color: isOpen ? AppEditorial.ink : AppEditorial.brand,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppEditorial.ink, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppEditorial.brand.withValues(alpha: 0.5),
+                    blurRadius: 20,
+                    offset: const Offset(0, 7),
+                  ),
+                ],
               ),
               alignment: Alignment.center,
-              child: const Icon(
-                Icons.add_rounded,
-                color: AppEditorial.ink,
-                size: 26,
+              child: Icon(
+                PhosphorIconsRegular.plus,
+                color: isOpen ? AppEditorial.canvas : AppEditorial.ink,
+                size: 34,
               ),
             ),
           ),
@@ -612,52 +627,60 @@ class _AddFuelSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenH = MediaQuery.of(context).size.height;
+    final mq = MediaQuery.of(context);
+    final keyboard = mq.viewInsets.bottom;
+    // Base sheet height (92% of screen). When the keyboard is up, shrink the
+    // sheet by the keyboard height so its bottom sits ABOVE the keyboard —
+    // otherwise the lower fields stay hidden behind it and can't scroll up.
+    final sheetHeight = (mq.size.height * 0.92) - keyboard;
 
     return Container(
-      height: screenH * 0.92,
+      height: sheetHeight,
+      // Push the whole sheet up above the keyboard.
+      margin: EdgeInsets.only(bottom: keyboard),
       decoration: const BoxDecoration(
         color: AppEditorial.canvas,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        border: Border(
-          top: BorderSide(color: AppEditorial.ink, width: 1),
-          left: BorderSide(color: AppEditorial.ink, width: 1),
-          right: BorderSide(color: AppEditorial.ink, width: 1),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 8, 0),
+            padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
             child: Column(
               children: [
                 Center(
                   child: Container(
-                    width: 36,
-                    height: 3,
-                    color: AppEditorial.hairline,
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppEditorial.hairline,
+                      borderRadius:
+                          BorderRadius.circular(AppEditorial.rPill),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 18),
                 Row(
                   children: [
                     Text(
                       prefill == null
-                          ? 'INPUT MANUAL'
-                          : 'REVIEW HASIL AI',
-                      style: AppEditorial.mono(
-                        fontSize: 13,
+                          ? 'Input Manual'
+                          : 'Review Hasil AI',
+                      style: AppEditorial.heading(
+                        fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
+                        letterSpacing: -0.3,
                       ),
                     ),
                     const Spacer(),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      icon: const Icon(Icons.close_rounded,
-                          size: 22, color: AppEditorial.ink),
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppEditorial.canvasSoft,
+                        shape: const CircleBorder(),
+                      ),
+                      icon: const Icon(PhosphorIconsRegular.x,
+                          size: 20, color: AppEditorial.ink),
                     ),
                   ],
                 ),
@@ -665,7 +688,7 @@ class _AddFuelSheet extends StatelessWidget {
               ],
             ),
           ),
-          Container(height: 1, color: AppEditorial.ink),
+          Container(height: 1, color: AppEditorial.hairlineSoft),
           Expanded(child: AddRefuelTab(prefill: prefill)),
         ],
       ),
@@ -700,7 +723,7 @@ class _SourceTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title,
-                      style: AppEditorial.mono(
+                      style: AppEditorial.heading(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       )),
@@ -713,7 +736,7 @@ class _SourceTile extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_rounded,
+            const Icon(PhosphorIconsRegular.arrowRight,
                 size: 18, color: AppEditorial.ink),
           ],
         ),
@@ -752,7 +775,7 @@ class _AddActionsOverlay extends StatelessWidget {
         _MiniAction(
           animation: animation,
           target: Offset(centerX - 84, fabCenterY - 72),
-          icon: Icons.photo_camera_outlined,
+          icon: PhosphorIconsRegular.camera,
           label: 'STRUK',
           background: AppEditorial.canvas,
           foreground: AppEditorial.ink,
@@ -761,7 +784,7 @@ class _AddActionsOverlay extends StatelessWidget {
         _MiniAction(
           animation: animation,
           target: Offset(centerX, fabCenterY - 124),
-          icon: Icons.edit_outlined,
+          icon: PhosphorIconsRegular.pencilSimple,
           label: 'MANUAL',
           background: AppEditorial.butter,
           foreground: AppEditorial.ink,
@@ -771,7 +794,7 @@ class _AddActionsOverlay extends StatelessWidget {
         _MiniAction(
           animation: animation,
           target: Offset(centerX + 84, fabCenterY - 72),
-          icon: Icons.mic_none_rounded,
+          icon: PhosphorIconsRegular.microphone,
           label: 'VOICE',
           background: AppEditorial.canvas,
           foreground: AppEditorial.ink,
@@ -832,14 +855,12 @@ class _MiniAction extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: background,
-                      border:
-                          Border.all(color: AppEditorial.ink, width: 1.5),
                       boxShadow: [
                         BoxShadow(
                           color:
-                              AppEditorial.ink.withValues(alpha: 0.15),
-                          blurRadius: 12,
-                          offset: const Offset(0, 3),
+                              AppEditorial.ink.withValues(alpha: 0.18),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
                         ),
                       ],
                     ),

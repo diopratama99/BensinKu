@@ -436,3 +436,117 @@ class EfficiencySample {
     );
   }
 }
+
+/// Kind of maintenance task. Each has a sensible default interval (in days)
+/// so users can one-tap add a preset without typing anything.
+///
+/// String values match the CHECK constraint in the maintenance migration.
+enum MaintenanceType {
+  engineOil('engine_oil', 'Ganti Oli Mesin', 60),
+  transmissionOil('transmission_oil', 'Ganti Oli Gardan/Transmisi', 240),
+  tires('tires', 'Ganti Ban', 730),
+  sparkPlug('spark_plug', 'Ganti Busi', 365),
+  brakePads('brake_pads', 'Kampas Rem', 365),
+  airFilter('air_filter', 'Filter Udara', 180),
+  battery('battery', 'Aki', 730),
+  generalService('general_service', 'Servis Rutin', 90),
+  cvtService('cvt_service', 'Servis CVT', 120),
+  chain('chain', 'Rantai', 180),
+  coolant('coolant', 'Air Radiator/Coolant', 365),
+  other('other', 'Lainnya', 90);
+
+  const MaintenanceType(this.dbValue, this.label, this.defaultIntervalDays);
+
+  final String dbValue;
+  final String label;
+
+  /// Default reminder interval in days. Rough rule-of-thumb values; the
+  /// user can override per item.
+  final int defaultIntervalDays;
+
+  static MaintenanceType? tryParse(String? value) {
+    if (value == null) return null;
+    for (final t in MaintenanceType.values) {
+      if (t.dbValue == value) return t;
+    }
+    return null;
+  }
+}
+
+/// A maintenance reminder item for a vehicle. Time-based by design — the
+/// reminder fires on `nextDueDate`, which is derived from `lastServiceDate +
+/// intervalDays`. Distance is shown only as a bonus estimate when available,
+/// never as the trigger (the app intentionally doesn't require odometer
+/// input).
+class MaintenanceItem {
+  const MaintenanceItem({
+    required this.id,
+    required this.vehicleId,
+    required this.type,
+    required this.title,
+    required this.intervalDays,
+    required this.lastServiceDate,
+    this.note,
+  });
+
+  final String id;
+  final String vehicleId;
+  final MaintenanceType type;
+
+  /// Display title. Defaults to the type's label but the user can rename
+  /// (esp. for `other`).
+  final String title;
+
+  /// Reminder interval in days.
+  final int intervalDays;
+
+  /// When the task was last done. The whole schedule pivots off this.
+  final DateTime lastServiceDate;
+
+  final String? note;
+
+  /// When the next service is due.
+  DateTime get nextDueDate =>
+      lastServiceDate.add(Duration(days: intervalDays));
+
+  /// Days from now until due (negative = overdue).
+  int get daysUntilDue {
+    final now = DateTime.now();
+    final due = nextDueDate;
+    return DateTime(due.year, due.month, due.day)
+        .difference(DateTime(now.year, now.month, now.day))
+        .inDays;
+  }
+
+  bool get isOverdue => daysUntilDue < 0;
+
+  /// "Due soon" window — within a week.
+  bool get isDueSoon => !isOverdue && daysUntilDue <= 7;
+
+  /// Progress through the current interval, 0..1 (1 = due now/overdue).
+  double get progress {
+    final elapsed =
+        DateTime.now().difference(lastServiceDate).inHours / 24.0;
+    if (intervalDays <= 0) return 1;
+    return (elapsed / intervalDays).clamp(0.0, 1.0);
+  }
+
+  factory MaintenanceItem.fromJson(Map<String, dynamic> json) {
+    final type = MaintenanceType.tryParse(json['type'] as String?) ??
+        MaintenanceType.other;
+    final rawTitle = (json['title'] as String?)?.trim();
+    return MaintenanceItem(
+      id: json['id'] as String,
+      vehicleId: json['vehicle_id'] as String,
+      type: type,
+      title: (rawTitle == null || rawTitle.isEmpty) ? type.label : rawTitle,
+      intervalDays: (json['interval_days'] as num?)?.toInt() ??
+          type.defaultIntervalDays,
+      lastServiceDate:
+          DateTime.parse(json['last_service_date'] as String).toLocal(),
+      note: (json['note'] as String?)?.trim().isEmpty == true
+          ? null
+          : (json['note'] as String?)?.trim(),
+    );
+  }
+}

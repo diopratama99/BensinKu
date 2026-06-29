@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../app/theme.dart';
 
@@ -12,138 +13,147 @@ class PrivacyPage extends StatelessWidget {
       backgroundColor: AppEditorial.canvas,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(PhosphorIconsRegular.arrowLeft),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        title: const Text('Privasi'),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 48),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
         children: [
-          Text('PRIVASI', style: AppEditorial.eyebrow()),
-          const SizedBox(height: 12),
           Text(
-            'Privasi\n& data.',
-            style: AppEditorial.mono(
-              fontSize: 32,
+            'Privasi & data',
+            style: AppEditorial.heading(
+              fontSize: 30,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.8,
-              height: 1.1,
+              height: 1.12,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Text(
             'Data pengisianmu adalah milikmu. Kami menyimpan seminimal '
             'mungkin dan tidak menjual datamu ke pihak ketiga.',
             style: AppEditorial.sans(
-              fontSize: 14,
+              fontSize: 14.5,
               color: AppEditorial.inkSoft,
               height: 1.5,
             ),
           ),
           const SizedBox(height: 28),
 
-          // ── YANG KAMU BERIKAN ──
-          const EditorialSectionHeader(
-            index: '01',
-            label: 'YANG KAMU BERIKAN',
-          ),
-          const SizedBox(height: 14),
-          _Bullet(
-            'Email untuk masuk dan menerima email penting '
-            '(verifikasi, lupa sandi).',
-          ),
-          _Bullet(
-            'Nama yang ditampilkan di dashboard.',
-          ),
-          _Bullet(
-            'Catatan pengisian BBM: nominal, liter, tanggal, '
-            'kendaraan, dan tipe BBM. Semua milikmu, bisa diakses '
-            'dan dihapus kapan saja.',
-          ),
-          _Bullet(
-            'Data kendaraan: CC mesin, tahun produksi, transmisi, '
-            'tipe bodi — dipakai untuk prediksi konsumsi yang akurat.',
-          ),
-          _Bullet(
-            'Data rute GPS (opsional): titik-titik koordinat selama '
-            'perjalanan aktif. Hanya direkam saat kamu menekan '
-            '"Mulai Perjalanan".',
-          ),
-          _Bullet(
-            'Preferensi berkendara: profil pemakaian, kota utama, '
-            'jarak mingguan — untuk kalibrasi prediksi.',
-          ),
-          const SizedBox(height: 28),
-
-          // ── DI MANA DISIMPAN ──
-          const EditorialSectionHeader(
-            index: '02',
-            label: 'DI MANA DISIMPAN',
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Database Postgres di Supabase (region Asia Tenggara). '
-            'Semua koneksi melalui HTTPS. Setiap baris di-tag dengan '
-            'ID pengguna dan dilindungi Row Level Security, jadi kamu '
-            'hanya bisa membaca catatanmu sendiri.',
-            style: AppEditorial.sans(
-              fontSize: 14,
-              color: AppEditorial.ink,
-              height: 1.5,
+          // ── Yang kamu berikan ──
+          const EditorialSectionHeader(label: 'Yang kamu berikan'),
+          const SizedBox(height: 12),
+          EditorialCard(
+            child: Column(
+              children: const [
+                _Bullet(
+                  'Email untuk masuk dan menerima email penting '
+                  '(verifikasi, lupa sandi).',
+                ),
+                _Bullet(
+                  'Nama yang ditampilkan di dashboard.',
+                ),
+                _Bullet(
+                  'Catatan pengisian BBM: nominal, liter, tanggal, '
+                  'kendaraan, dan tipe BBM. Semua milikmu, bisa diakses '
+                  'dan dihapus kapan saja.',
+                ),
+                _Bullet(
+                  'Data kendaraan: CC mesin, tahun produksi, transmisi, '
+                  'tipe bodi — dipakai untuk prediksi konsumsi yang akurat.',
+                ),
+                _Bullet(
+                  'Data rute GPS (opsional): titik-titik koordinat selama '
+                  'perjalanan aktif. Hanya direkam saat kamu menekan '
+                  '"Mulai Perjalanan".',
+                ),
+                _Bullet(
+                  'Preferensi berkendara: profil pemakaian, kota utama, '
+                  'jarak mingguan — untuk kalibrasi prediksi.',
+                  isLast: true,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 28),
 
-          // ── YANG TIDAK KAMI LAKUKAN ──
-          const EditorialSectionHeader(
-            index: '03',
-            label: 'YANG TIDAK KAMI LAKUKAN',
-          ),
-          const SizedBox(height: 14),
-          _Bullet(
-            'Tidak ada pelacakan iklan atau analitik pihak ketiga.',
-          ),
-          _Bullet(
-            'Tidak ada penjualan data.',
-          ),
-          _Bullet(
-            'Tidak ada pengiriman datamu ke layanan eksternal '
-            'tanpa pemicu langsung dari kamu.',
-          ),
-          const SizedBox(height: 28),
-
-          // ── HAK KAMU ──
-          const EditorialSectionHeader(
-            index: '04',
-            label: 'HAK KAMU',
-          ),
-          const SizedBox(height: 14),
-          _Bullet(
-            'Edit atau hapus catatan kapan saja dari halaman Arsip.',
-          ),
-          _Bullet(
-            'Hapus akun dan semua data terkait. Tombolnya akan '
-            'segera tersedia, sementara ini bisa diminta lewat '
-            'kontak di bawah.',
-          ),
-          _Bullet(
-            'Minta salinan datamu dengan menghubungi developer.',
+          // ── Di mana disimpan ──
+          const EditorialSectionHeader(label: 'Di mana disimpan'),
+          const SizedBox(height: 12),
+          EditorialCard(
+            child: Text(
+              'Database Postgres di Supabase (region Asia Tenggara). '
+              'Semua koneksi melalui HTTPS. Setiap baris di-tag dengan '
+              'ID pengguna dan dilindungi Row Level Security, jadi kamu '
+              'hanya bisa membaca catatanmu sendiri.',
+              style: AppEditorial.sans(
+                fontSize: 14,
+                color: AppEditorial.ink,
+                height: 1.5,
+              ),
+            ),
           ),
           const SizedBox(height: 28),
 
-          // ── KONTAK ──
-          const EditorialSectionHeader(
-            index: '05',
-            label: 'KONTAK',
+          // ── Yang tidak kami lakukan ──
+          const EditorialSectionHeader(label: 'Yang tidak kami lakukan'),
+          const SizedBox(height: 12),
+          EditorialCard(
+            child: Column(
+              children: const [
+                _Bullet(
+                  'Tidak ada pelacakan iklan atau analitik pihak ketiga.',
+                ),
+                _Bullet(
+                  'Tidak ada penjualan data.',
+                ),
+                _Bullet(
+                  'Tidak ada pengiriman datamu ke layanan eksternal '
+                  'tanpa pemicu langsung dari kamu.',
+                  isLast: true,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
-          Text(
-            'Pertanyaan, permintaan ekspor, atau penghapusan data: '
-            'hubungi TemanLabs lewat halaman Tentang BensinKu.',
-            style: AppEditorial.sans(
-              fontSize: 14,
-              color: AppEditorial.ink,
-              height: 1.5,
+          const SizedBox(height: 28),
+
+          // ── Hak kamu ──
+          const EditorialSectionHeader(label: 'Hak kamu'),
+          const SizedBox(height: 12),
+          EditorialCard(
+            child: Column(
+              children: const [
+                _Bullet(
+                  'Edit atau hapus catatan kapan saja dari halaman Arsip.',
+                ),
+                _Bullet(
+                  'Hapus akun dan semua data terkait. Tombolnya akan '
+                  'segera tersedia, sementara ini bisa diminta lewat '
+                  'kontak di bawah.',
+                ),
+                _Bullet(
+                  'Minta salinan datamu dengan menghubungi developer.',
+                  isLast: true,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          // ── Kontak ──
+          const EditorialSectionHeader(label: 'Kontak'),
+          const SizedBox(height: 12),
+          EditorialCard(
+            child: Text(
+              'Pertanyaan, permintaan ekspor, atau penghapusan data: '
+              'hubungi TemanLabs lewat halaman Tentang BensinKu.',
+              style: AppEditorial.sans(
+                fontSize: 14,
+                color: AppEditorial.ink,
+                height: 1.5,
+              ),
             ),
           ),
         ],
@@ -153,23 +163,24 @@ class PrivacyPage extends StatelessWidget {
 }
 
 class _Bullet extends StatelessWidget {
-  const _Bullet(this.text);
+  const _Bullet(this.text, {this.isLast = false});
   final String text;
+  final bool isLast;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 7, right: 12),
             child: Container(
-              width: 5,
-              height: 5,
+              width: 6,
+              height: 6,
               decoration: const BoxDecoration(
-                color: AppEditorial.ink,
+                color: AppEditorial.brand,
                 shape: BoxShape.circle,
               ),
             ),

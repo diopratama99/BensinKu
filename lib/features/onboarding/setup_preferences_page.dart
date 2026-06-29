@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme.dart';
@@ -108,40 +109,49 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
               children: [
-                Text('OPSIONAL · PREFERENSI',
-                    style: AppEditorial.mono(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppEditorial.butterDeep,
-                      letterSpacing: 0.6,
-                    )),
-                const SizedBox(height: 28),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppEditorial.brandTint,
+                        borderRadius:
+                            BorderRadius.circular(AppEditorial.rPill),
+                      ),
+                      child: Text(
+                        'Preferensi',
+                        style: AppEditorial.sans(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppEditorial.brandDeep,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
                 Text(
                   'Sedikit detail untuk prediksi yang akurat.',
-                  style: AppEditorial.mono(
+                  style: AppEditorial.heading(
                     fontSize: 26,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: -0.5,
                     height: 1.15,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(
                   'Semakin lengkap data, semakin tepat prediksi waktu isi ulang dan estimasi konsumsi.',
                   style: AppEditorial.sans(
-                    fontSize: 13,
+                    fontSize: 14,
                     color: AppEditorial.inkSoft,
                     height: 1.5,
                   ),
                 ),
                 const SizedBox(height: 28),
-                Container(height: 1, color: AppEditorial.ink),
-                const SizedBox(height: 24),
 
-                const EditorialSectionHeader(
-                  index: '01',
-                  label: 'BBM FAVORIT',
-                ),
+                const _PrefSectionLabel('BBM favorit'),
                 const SizedBox(height: 12),
                 if (products.isEmpty)
                   const _LoadingLine()
@@ -156,39 +166,31 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
                             _preferredFuelId = selected ? null : p.id),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+                              horizontal: 16, vertical: 10),
                           decoration: BoxDecoration(
                             color: selected
-                                ? AppEditorial.butter
-                                : AppEditorial.canvas,
-                            border: Border.all(
-                              color: selected
-                                  ? AppEditorial.ink
-                                  : AppEditorial.hairline,
-                              width: 1,
-                            ),
+                                ? AppEditorial.brand
+                                : AppEditorial.canvasSoft,
                             borderRadius:
-                                BorderRadius.circular(AppEditorial.rTiny),
+                                BorderRadius.circular(AppEditorial.rPill),
                           ),
                           child: Text(
                             p.label,
-                            style: AppEditorial.mono(
-                              fontSize: 12,
+                            style: AppEditorial.sans(
+                              fontSize: 13,
                               fontWeight: selected
                                   ? FontWeight.w700
-                                  : FontWeight.w500,
+                                  : FontWeight.w600,
+                              color: AppEditorial.ink,
                             ),
                           ),
                         ),
                       );
                     }).toList(),
                   ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 26),
 
-                const EditorialSectionHeader(
-                  index: '02',
-                  label: 'JARAK / MINGGU',
-                ),
+                const _PrefSectionLabel('Jarak per minggu'),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _weeklyKmCtrl,
@@ -200,12 +202,9 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
                     suffixText: 'km',
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 26),
 
-                const EditorialSectionHeader(
-                  index: '03',
-                  label: 'FREKUENSI ISI',
-                ),
+                const _PrefSectionLabel('Frekuensi isi'),
                 const SizedBox(height: 12),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -213,16 +212,18 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
                   children: [
                     Text(
                       '${_weeklyRefuelCount.round()}',
-                      style: AppEditorial.mono(
+                      style: AppEditorial.heading(
                         fontSize: 38,
-                        fontWeight: FontWeight.w500,
-                        color: AppEditorial.butterDeep,
+                        fontWeight: FontWeight.w700,
+                        color: AppEditorial.ink,
                       ),
                     ),
+                    const SizedBox(width: 6),
                     Text(
-                      '× / minggu',
-                      style: AppEditorial.mono(
+                      'kali per minggu',
+                      style: AppEditorial.sans(
                         fontSize: 14,
+                        fontWeight: FontWeight.w500,
                         color: AppEditorial.inkSoft,
                       ),
                     ),
@@ -233,9 +234,11 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
                     activeTrackColor: AppEditorial.ink,
                     inactiveTrackColor: AppEditorial.hairline,
                     thumbColor: AppEditorial.ink,
-                    trackHeight: 2,
+                    trackHeight: 4,
                     thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 8),
+                        enabledThumbRadius: 9),
+                    overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 18),
                   ),
                   child: Slider(
                     min: 1,
@@ -246,12 +249,9 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
                         setState(() => _weeklyRefuelCount = v),
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 26),
 
-                const EditorialSectionHeader(
-                  index: '04',
-                  label: 'PROFIL PEMAKAIAN',
-                ),
+                const _PrefSectionLabel('Profil pemakaian'),
                 const SizedBox(height: 12),
                 _PrefPicker<UsageProfile>(
                   value: _usageProfile,
@@ -259,12 +259,9 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
                   labelOf: (v) => v.label,
                   onChange: (v) => setState(() => _usageProfile = v),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 26),
 
-                const EditorialSectionHeader(
-                  index: '05',
-                  label: 'KOTA UTAMA',
-                ),
+                const _PrefSectionLabel('Kota utama'),
                 const SizedBox(height: 12),
                 _PrefPicker<PrimaryCity>(
                   value: _primaryCity,
@@ -285,7 +282,7 @@ class _SetupPreferencesPageState extends State<SetupPreferencesPage> {
                             color: AppEditorial.canvas,
                           ),
                         )
-                      : const Text('SIMPAN & MASUK DASHBOARD →'),
+                      : const Text('Simpan & masuk dashboard'),
                 ),
               ],
             );
@@ -313,7 +310,7 @@ class _LoadingLine extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        Text('memuat...',
+        Text('Memuat…',
             style: AppEditorial.sans(
               fontSize: 13,
               color: AppEditorial.inkSoft,
@@ -350,49 +347,45 @@ class _PrefPicker<T> extends StatelessWidget {
             onTap: () => onChange(selected ? null : opt),
             child: Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
+                  horizontal: 16, vertical: 15),
               decoration: BoxDecoration(
                 color: selected
-                    ? AppEditorial.butter
-                    : AppEditorial.canvas,
-                border: Border.all(
-                  color: selected
-                      ? AppEditorial.ink
-                      : AppEditorial.hairline,
-                  width: selected ? 1.5 : 1,
-                ),
-                borderRadius:
-                    BorderRadius.circular(AppEditorial.rTiny),
+                    ? AppEditorial.brand
+                    : AppEditorial.canvasSoft,
+                borderRadius: BorderRadius.circular(AppEditorial.rTiny),
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 16,
-                    height: 16,
+                    width: 20,
+                    height: 20,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppEditorial.ink,
-                        width: 1.2,
-                      ),
                       color: selected
                           ? AppEditorial.ink
-                          : AppEditorial.canvas,
+                          : Colors.transparent,
+                      border: selected
+                          ? null
+                          : Border.all(
+                              color: AppEditorial.inkMuted,
+                              width: 1.5,
+                            ),
                     ),
                     child: selected
-                        ? const Icon(Icons.check_rounded,
-                            size: 11, color: AppEditorial.canvas)
+                        ? const Icon(PhosphorIconsRegular.check,
+                            size: 13, color: AppEditorial.brand)
                         : null,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Text(
                       labelOf(opt),
-                      style: AppEditorial.mono(
-                        fontSize: 14,
+                      style: AppEditorial.sans(
+                        fontSize: 14.5,
                         fontWeight: selected
                             ? FontWeight.w700
-                            : FontWeight.w500,
+                            : FontWeight.w600,
+                        color: AppEditorial.ink,
                       ),
                     ),
                   ),
@@ -402,6 +395,24 @@ class _PrefPicker<T> extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+/// Label section pada halaman preferensi — judul ringkas sentence case.
+class _PrefSectionLabel extends StatelessWidget {
+  const _PrefSectionLabel(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: AppEditorial.heading(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
+      ),
     );
   }
 }

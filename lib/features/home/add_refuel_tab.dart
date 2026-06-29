@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -20,11 +21,13 @@ class AddRefuelTab extends StatefulWidget {
 class _AddRefuelTabState extends State<AddRefuelTab> {
   final _repo = SupabaseRepository.ofDefaultClient();
   final _totalController = TextEditingController();
+  final _litersController = TextEditingController();
 
   DateTime _refuelDate = DateTime.now();
   String? _vehicleId;
   String? _fuelProductId;
   bool _saving = false;
+  bool _isEceran = false;
   String? _error;
 
   List<Vehicle> _vehicles = [];
@@ -69,6 +72,7 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
   @override
   void dispose() {
     _totalController.dispose();
+    _litersController.dispose();
     super.dispose();
   }
 
@@ -76,6 +80,15 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
     final cleaned = raw.replaceAll(RegExp(r'[^0-9]'), '');
     if (cleaned.isEmpty) return null;
     return num.tryParse(cleaned);
+  }
+
+  /// Parse a decimal liters value (allows comma or dot).
+  double? _parseLiters(String raw) {
+    final cleaned = raw.trim().replaceAll(',', '.');
+    if (cleaned.isEmpty) return null;
+    final v = double.tryParse(cleaned);
+    if (v == null || v <= 0) return null;
+    return v;
   }
 
   @override
@@ -167,6 +180,55 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
           ),
           const SizedBox(height: 24),
 
+          // Eceran toggle — when on, the user fills liters manually because
+          // bottled/eceran fuel has no fixed pump price-per-liter.
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
+            decoration: BoxDecoration(
+              color: _isEceran ? AppEditorial.butterSoft : AppEditorial.cream,
+              border: Border.all(
+                color: _isEceran
+                    ? AppEditorial.butterDeep
+                    : AppEditorial.hairlineSoft,
+                width: 1,
+              ),
+              borderRadius: BorderRadius.circular(AppEditorial.rCard),
+            ),
+            child: Row(
+              children: [
+                const Icon(PhosphorIconsRegular.drop,
+                    size: 18, color: AppEditorial.ink),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Bensin eceran',
+                        style: AppEditorial.heading(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'Isi harga & liter manual',
+                        style: AppEditorial.sans(
+                          fontSize: 11,
+                          color: AppEditorial.inkSoft,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _isEceran,
+                  onChanged: (v) => setState(() => _isEceran = v),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // §04 Nominal — pump LCD style
           _Section(
             index: '04',
@@ -178,66 +240,149 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
                       BorderSide(color: AppEditorial.ink, width: 1.5),
                 ),
               ),
-              child: TextField(
-                controller: _totalController,
-                keyboardType: TextInputType.number,
-                style: AppEditorial.mono(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -0.5,
-                ),
-                decoration: InputDecoration(
-                  hintText: '0',
-                  hintStyle: AppEditorial.mono(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w500,
-                    color: AppEditorial.inkMuted,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  // Always-visible "Rp" prefix (InputDecoration.prefixText
+                  // only shows when the field is focused/non-empty).
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4, bottom: 4),
+                    child: Text(
+                      'Rp',
+                      style: AppEditorial.mono(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: AppEditorial.inkSoft,
+                      ),
+                    ),
                   ),
-                  prefixText: 'Rp ',
-                  prefixStyle: AppEditorial.mono(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    color: AppEditorial.inkSoft,
+                  Expanded(
+                    child: TextField(
+                      controller: _totalController,
+                      keyboardType: TextInputType.number,
+                      style: AppEditorial.mono(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -0.5,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '0',
+                        hintStyle: AppEditorial.mono(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w500,
+                          color: AppEditorial.inkMuted,
+                        ),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        isDense: true,
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
                   ),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onChanged: (_) => setState(() {}),
+                ],
               ),
             ),
           ),
           const SizedBox(height: 24),
 
-          // §05 Hasil hitung — looks like a printed receipt
-          if (_vehicleId != null && _fuelProductId != null)
-            FutureBuilder<FuelPrice?>(
-              future: _repo.getFuelPrice(
-                fuelProductId: _fuelProductId!,
-                onDate: _refuelDate,
+          // §05 Liter — manual input, ONLY for eceran.
+          if (_isEceran) ...[
+            _Section(
+              index: '05',
+              label: 'JUMLAH LITER',
+              child: Container(
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom:
+                        BorderSide(color: AppEditorial.ink, width: 1.5),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _litersController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        style: AppEditorial.mono(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: -0.5,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: '0.0',
+                          hintStyle: AppEditorial.mono(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w500,
+                            color: AppEditorial.inkMuted,
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                          isDense: true,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 4),
+                      child: Text(
+                        'L',
+                        style: AppEditorial.mono(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                          color: AppEditorial.inkSoft,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return _ErrorBox(message: snapshot.error.toString());
-                }
-                final price = snapshot.data;
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const _LoadingLine();
-                }
-                if (price == null) {
-                  return const _ErrorBox(
-                    message:
-                        'Harga BBM belum di-set untuk tanggal ini. Hubungi admin.',
-                  );
-                }
-                return _ComputedBlock(
-                  pricePerLiter: price.pricePerLiter,
-                  total: _parseNumber(_totalController.text),
-                  rupiah: _rupiah,
-                );
-              },
             ),
+            const SizedBox(height: 24),
+            // Computed price/liter from total ÷ liters.
+            _EceranComputedBlock(
+              total: _parseNumber(_totalController.text),
+              liters: _parseLiters(_litersController.text),
+              rupiah: _rupiah,
+            ),
+          ] else
+            // §05 Hasil hitung (SPBU) — auto from master price.
+            if (_vehicleId != null && _fuelProductId != null)
+              FutureBuilder<FuelPrice?>(
+                future: _repo.getFuelPrice(
+                  fuelProductId: _fuelProductId!,
+                  onDate: _refuelDate,
+                ),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return _ErrorBox(message: snapshot.error.toString());
+                  }
+                  final price = snapshot.data;
+                  if (snapshot.connectionState ==
+                      ConnectionState.waiting) {
+                    return const _LoadingLine();
+                  }
+                  if (price == null) {
+                    return const _ErrorBox(
+                      message:
+                          'Harga BBM belum di-set untuk tanggal ini. '
+                          'Aktifkan "Bensin eceran" untuk isi liter manual.',
+                    );
+                  }
+                  return _ComputedBlock(
+                    pricePerLiter: price.pricePerLiter,
+                    total: _parseNumber(_totalController.text),
+                    rupiah: _rupiah,
+                  );
+                },
+              ),
           const SizedBox(height: 28),
           FilledButton(
             onPressed: _saving ? null : () => _save(context),
@@ -250,7 +395,7 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
                       color: AppEditorial.canvas,
                     ),
                   )
-                : const Text('SIMPAN PENGISIAN →'),
+                : const Text('Simpan pengisian'),
           ),
           if (_error != null) ...[
             const SizedBox(height: 14),
@@ -278,20 +423,35 @@ class _AddRefuelTabState extends State<AddRefuelTab> {
       final total = _parseNumber(_totalController.text);
       if (total == null) throw StateError('Nominal wajib diisi');
 
-      final price = await _repo.getFuelPrice(
-        fuelProductId: fuelProductId,
-        onDate: _refuelDate,
-      );
-      if (price == null) {
-        throw StateError('Harga BBM belum ada untuk tanggal ini');
-      }
+      final double pricePerLiter;
+      final double liters;
 
-      final pricePerLiter = price.pricePerLiter;
-      if (pricePerLiter <= 0) {
-        throw StateError('Harga per liter tidak valid');
+      if (_isEceran) {
+        // Eceran: user provides liters, price/liter is derived.
+        final manualLiters = _parseLiters(_litersController.text);
+        if (manualLiters == null) {
+          throw StateError('Jumlah liter wajib diisi untuk eceran');
+        }
+        liters = manualLiters;
+        pricePerLiter = total / liters;
+      } else {
+        // SPBU: look up master price, derive liters.
+        final price = await _repo.getFuelPrice(
+          fuelProductId: fuelProductId,
+          onDate: _refuelDate,
+        );
+        if (price == null) {
+          throw StateError(
+            'Harga BBM belum ada untuk tanggal ini. '
+            'Aktifkan "Bensin eceran" untuk isi liter manual.',
+          );
+        }
+        if (price.pricePerLiter <= 0) {
+          throw StateError('Harga per liter tidak valid');
+        }
+        pricePerLiter = price.pricePerLiter.toDouble();
+        liters = total / pricePerLiter;
       }
-
-      final liters = total / pricePerLiter;
 
       final selectedVehicle =
           _vehicles.where((v) => v.id == vehicleId).firstOrNull;
@@ -374,26 +534,29 @@ class _DateField extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(AppEditorial.rButton),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: AppEditorial.hairline, width: 1),
-          ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: AppEditorial.canvasSoft,
+          borderRadius: BorderRadius.circular(AppEditorial.rButton),
         ),
         child: Row(
           children: [
+            const Icon(PhosphorIconsRegular.calendarBlank,
+                color: AppEditorial.inkSoft, size: 20),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 dateFmt.format(date),
-                style: AppEditorial.mono(
-                  fontSize: 18,
+                style: AppEditorial.sans(
+                  fontSize: 15,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            const Icon(Icons.event_outlined,
-                color: AppEditorial.inkSoft, size: 20),
+            const Icon(PhosphorIconsRegular.caretDown,
+                color: AppEditorial.inkMuted, size: 20),
           ],
         ),
       ),
@@ -420,22 +583,22 @@ class _VehiclePicker extends StatelessWidget {
         final selected = selectedId == v.id;
         return GestureDetector(
           onTap: () => onChanged(v.id),
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
             padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 10),
+                horizontal: 16, vertical: 11),
             decoration: BoxDecoration(
-              color: selected ? AppEditorial.ink : AppEditorial.canvas,
-              border: Border.all(color: AppEditorial.ink, width: 1),
-              borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+              color: selected ? AppEditorial.ink : AppEditorial.canvasSoft,
+              borderRadius: BorderRadius.circular(AppEditorial.rPill),
             ),
             child: Text(
-              '${v.type.label.toUpperCase()} · ${v.name}',
-              style: AppEditorial.mono(
-                fontSize: 12,
+              '${v.type.label} · ${v.name}',
+              style: AppEditorial.sans(
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: selected
-                    ? AppEditorial.canvas
-                    : AppEditorial.ink,
+                    ? const Color(0xFFFFFFFF)
+                    : AppEditorial.inkSoft,
               ),
             ),
           ),
@@ -458,23 +621,25 @@ class _FuelDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: AppEditorial.hairline, width: 1),
-        ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: AppEditorial.canvasSoft,
+        borderRadius: BorderRadius.circular(AppEditorial.rButton),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           isExpanded: true,
           value: selectedId,
-          icon: const Icon(Icons.arrow_drop_down_rounded,
+          icon: const Icon(PhosphorIconsRegular.caretDown,
               color: AppEditorial.inkSoft),
           dropdownColor: AppEditorial.cream,
-          style: AppEditorial.mono(
+          borderRadius: BorderRadius.circular(AppEditorial.rButton),
+          style: AppEditorial.sans(
             fontSize: 15,
             fontWeight: FontWeight.w600,
+            color: AppEditorial.ink,
           ),
+          padding: const EdgeInsets.symmetric(vertical: 4),
           items: products
               .map(
                 (p) => DropdownMenuItem(
@@ -507,9 +672,9 @@ class _ComputedBlock extends StatelessWidget {
         : (total! / pricePerLiter);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       decoration: BoxDecoration(
-        color: AppEditorial.butter,
+        color: AppEditorial.butterSoft,
         borderRadius: BorderRadius.circular(AppEditorial.rCard),
       ),
       child: Column(
@@ -517,19 +682,24 @@ class _ComputedBlock extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('AUTO HITUNG', style: AppEditorial.eyebrow()),
+              Text('Auto Hitung',
+                  style: AppEditorial.heading(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppEditorial.butterDeep,
+                  )),
               const Spacer(),
               Container(
-                width: 6,
-                height: 6,
+                width: 7,
+                height: 7,
                 decoration: const BoxDecoration(
-                  color: AppEditorial.ink,
+                  color: AppEditorial.butter,
                   shape: BoxShape.circle,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -539,20 +709,22 @@ class _ComputedBlock extends StatelessWidget {
                   children: [
                     Text(
                       liters == null ? '—' : liters.toStringAsFixed(3),
-                      style: AppEditorial.mono(
+                      style: AppEditorial.heading(
                         fontSize: 36,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: -1,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -1.2,
                         height: 1.0,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text('LITER', style: AppEditorial.eyebrow()),
+                    const SizedBox(height: 4),
+                    Text('LITER',
+                        style: AppEditorial.eyebrow(
+                            color: AppEditorial.butterDeep)),
                   ],
                 ),
               ),
               Container(
-                  width: 1, height: 56, color: AppEditorial.ink),
+                  width: 1, height: 52, color: AppEditorial.butter),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -560,13 +732,115 @@ class _ComputedBlock extends StatelessWidget {
                   children: [
                     Text(
                       rupiah.format(pricePerLiter).trim(),
-                      style: AppEditorial.mono(
+                      style: AppEditorial.heading(
                         fontSize: 18,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text('HARGA / L', style: AppEditorial.eyebrow()),
+                    const SizedBox(height: 4),
+                    Text('HARGA / L',
+                        style: AppEditorial.eyebrow(
+                            color: AppEditorial.butterDeep)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Eceran result block — liters are user-provided, price/liter is derived
+/// (total ÷ liters) since bottled/eceran fuel has no fixed pump price.
+class _EceranComputedBlock extends StatelessWidget {
+  const _EceranComputedBlock({
+    required this.total,
+    required this.liters,
+    required this.rupiah,
+  });
+  final num? total;
+  final double? liters;
+  final NumberFormat rupiah;
+
+  @override
+  Widget build(BuildContext context) {
+    final pricePerLiter = (total == null || liters == null || liters! <= 0)
+        ? null
+        : (total! / liters!);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      decoration: BoxDecoration(
+        color: AppEditorial.butterSoft,
+        borderRadius: BorderRadius.circular(AppEditorial.rCard),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text('Eceran',
+                  style: AppEditorial.heading(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppEditorial.butterDeep,
+                  )),
+              const Spacer(),
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: AppEditorial.butter,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      liters == null ? '—' : liters!.toStringAsFixed(2),
+                      style: AppEditorial.heading(
+                        fontSize: 36,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -1.2,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('LITER (MANUAL)',
+                        style: AppEditorial.eyebrow(
+                            color: AppEditorial.butterDeep)),
+                  ],
+                ),
+              ),
+              Container(width: 1, height: 52, color: AppEditorial.butter),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      pricePerLiter == null
+                          ? '—'
+                          : rupiah.format(pricePerLiter).trim(),
+                      style: AppEditorial.heading(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('HARGA / L',
+                        style: AppEditorial.eyebrow(
+                            color: AppEditorial.butterDeep)),
                   ],
                 ),
               ),
@@ -613,14 +887,13 @@ class _ErrorBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppEditorial.canvas,
-        border: Border.all(color: AppEditorial.rust, width: 1),
-        borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+        color: AppEditorial.rustSoft,
+        borderRadius: BorderRadius.circular(AppEditorial.rButton),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded,
+          const Icon(PhosphorIconsRegular.warningCircle,
               color: AppEditorial.rust, size: 18),
           const SizedBox(width: 10),
           Expanded(

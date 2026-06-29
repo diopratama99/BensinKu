@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
+import '../../services/google_auth_service.dart';
+import '../../widgets/user_avatar.dart';
 import '../onboarding/add_vehicle_page.dart';
 import 'about_page.dart';
+import 'account_edit_page.dart';
 import 'privacy_page.dart';
 import 'vehicle_detail_page.dart';
 
@@ -26,91 +30,102 @@ class _ProfileTabState extends State<ProfileTab> {
     final raw = user?.userMetadata?['name'];
     final name = raw is String ? raw.trim() : '';
     final email = user?.email ?? '';
-    final initials = name.isEmpty
-        ? '?'
-        : name
-            .trim()
-            .split(' ')
-            .take(2)
-            .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
-            .join();
 
     return Scaffold(
       backgroundColor: AppEditorial.canvas,
       appBar: Navigator.of(context).canPop()
           ? AppBar(
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded),
+                icon: const Icon(PhosphorIconsRegular.arrowLeft),
                 onPressed: () => Navigator.of(context).pop(),
               ),
-              title: Text('PROFIL',
-                  style: AppEditorial.mono(
-                    fontSize: 14,
+              title: Text('Profil',
+                  style: AppEditorial.heading(
+                    fontSize: 19,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
+                    letterSpacing: -0.3,
                   )),
             )
           : null,
       body: RefreshIndicator(
-        onRefresh: () async => setState(() {}),
+        onRefresh: () async {
+          try {
+            await Supabase.instance.client.auth.getUser();
+          } catch (_) {}
+          UserAvatar.bumpCacheBust();
+          setState(() {});
+        },
         color: AppEditorial.ink,
         backgroundColor: AppEditorial.canvas,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 80),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
           children: [
-            // Identity card
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-              decoration: BoxDecoration(
-                color: AppEditorial.cream,
-                border:
-                    Border.all(color: AppEditorial.hairlineSoft, width: 1),
-                borderRadius: BorderRadius.circular(AppEditorial.rCard),
-              ),
+            // ── Kartu identitas ──
+            EditorialCard(
+              padding: const EdgeInsets.all(18),
+              onTap: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AccountEditPage()),
+                );
+                if (!mounted) return;
+                setState(() {});
+              },
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Container(
-                    height: 64,
-                    width: 64,
-                    decoration: BoxDecoration(
-                      color: AppEditorial.butter,
-                      border: Border.all(
-                          color: AppEditorial.ink, width: 1.5),
-                      borderRadius:
-                          BorderRadius.circular(AppEditorial.rTiny),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      initials,
-                      style: AppEditorial.mono(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  const UserAvatar(
+                    size: 62,
+                    shape: BoxShape.circle,
+                    borderColor: Color(0xFFFFFFFF),
+                    borderWidth: 0,
+                    monogramFontSize: 24,
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('PEMILIK', style: AppEditorial.eyebrow()),
-                        const SizedBox(height: 4),
                         Text(
                           name.isEmpty ? 'Pengguna' : name,
-                          style: AppEditorial.mono(
-                            fontSize: 18,
+                          style: AppEditorial.heading(
+                            fontSize: 19,
                             fontWeight: FontWeight.w700,
                           ),
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           email.isEmpty ? '—' : email,
                           style: AppEditorial.sans(
-                            fontSize: 12,
+                            fontSize: 12.5,
                             color: AppEditorial.inkSoft,
                           ),
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppEditorial.brandTint,
+                            borderRadius:
+                                BorderRadius.circular(AppEditorial.rPill),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(PhosphorIconsRegular.pencilSimple,
+                                  size: 13, color: AppEditorial.brandDeep),
+                              const SizedBox(width: 4),
+                              Text('Edit profil',
+                                  style: AppEditorial.sans(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppEditorial.brandDeep,
+                                  )),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -118,9 +133,9 @@ class _ProfileTabState extends State<ProfileTab> {
                 ],
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 26),
 
-            // §01 Kendaraan
+            // ── Kendaraan ──
             FutureBuilder<List<Vehicle>>(
               future: _repo.listVehicles(),
               builder: (context, snap) {
@@ -133,8 +148,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     EditorialSectionHeader(
-                      index: '01',
-                      label: 'KENDARAAN',
+                      label: 'Kendaraan',
                       trailing: GestureDetector(
                         onTap: () async {
                           await Navigator.of(context).push(
@@ -145,37 +159,48 @@ class _ProfileTabState extends State<ProfileTab> {
                           if (!mounted) return;
                           setState(() {});
                         },
-                        child: Text('+ TAMBAH',
-                            style: AppEditorial.eyebrow(
-                                color: AppEditorial.ink)),
+                        child: Text('+ Tambah',
+                            style: AppEditorial.sans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppEditorial.brandDeep)),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     if (vehicles.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
-                          'belum ada kendaraan.',
-                          style: AppEditorial.sans(
-                            fontSize: 13,
-                            color: AppEditorial.inkSoft,
+                      EditorialCard(
+                        padding: const EdgeInsets.symmetric(vertical: 22),
+                        child: Center(
+                          child: Text(
+                            'Belum ada kendaraan.',
+                            style: AppEditorial.sans(
+                              fontSize: 13,
+                              color: AppEditorial.inkMuted,
+                            ),
                           ),
                         ),
                       )
                     else
-                      ...vehicles.asMap().entries.map(
-                            (e) => _VehicleEntry(
-                              vehicle: e.value,
-                              isLast: e.key == vehicles.length - 1,
-                            ),
-                          ),
+                      EditorialCard(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          children: [
+                            for (var i = 0; i < vehicles.length; i++)
+                              _VehicleEntry(
+                                vehicle: vehicles[i],
+                                isLast: i == vehicles.length - 1,
+                              ),
+                          ],
+                        ),
+                      ),
                   ],
                 );
               },
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 26),
 
-            // §02 Preferensi
+            // ── Preferensi ──
             _PreferencesBlock(
               onEdit: () async {
                 await Navigator.of(context).push(
@@ -186,80 +211,86 @@ class _ProfileTabState extends State<ProfileTab> {
                 setState(() {});
               },
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 26),
 
-            // §03 Lainnya
-            const EditorialSectionHeader(index: '03', label: 'LAINNYA'),
+            // ── Lainnya ──
+            const EditorialSectionHeader(label: 'Lainnya'),
             const SizedBox(height: 12),
-            _MenuTile(
-              icon: Icons.shield_outlined,
-              label: 'Privasi & data',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PrivacyPage()),
-              ),
-            ),
-            _MenuTile(
-              icon: Icons.info_outline_rounded,
-              label: 'Tentang BensinKu',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AboutPage()),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // §04 Akun
-            const EditorialSectionHeader(index: '04', label: 'AKUN'),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text('Keluar dari akun?',
-                        style: AppEditorial.mono(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        )),
-                    content: const Text('Sesi akan dihapus.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(false),
-                        child: const Text('BATAL'),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.of(ctx).pop(true),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppEditorial.rust,
-                        ),
-                        child: const Text('KELUAR'),
-                      ),
-                    ],
+            EditorialCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  _MenuTile(
+                    icon: PhosphorIconsRegular.shield,
+                    label: 'Privasi & data',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const PrivacyPage()),
+                    ),
                   ),
-                );
-                if (confirm != true) return;
-                // _AuthGate listens to onAuthStateChange and will rebuild
-                // to SignInPage + pop any pushed routes automatically once
-                // the session clears. Don't pop here — that would race
-                // with the gate's own pop and can leave the stack in a
-                // half-cleared state.
-                await Supabase.instance.client.auth.signOut();
-              },
-              icon: const Icon(Icons.logout_rounded,
-                  size: 16, color: AppEditorial.rust),
-              label: const Text('KELUAR DARI AKUN',
-                  style: TextStyle(color: AppEditorial.rust)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppEditorial.rust, width: 1),
+                  _MenuTile(
+                    icon: PhosphorIconsRegular.info,
+                    label: 'Tentang BensinKu',
+                    isLast: true,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AboutPage()),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 26),
+
+            // ── Akun ──
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text('Keluar dari akun?',
+                          style: AppEditorial.heading(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          )),
+                      content: const Text('Sesi akan dihapus.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: const Text('Batal'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppEditorial.rust,
+                          ),
+                          child: const Text('Keluar'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm != true) return;
+                  await GoogleAuthService.signOutGoogle();
+                  await Supabase.instance.client.auth.signOut();
+                },
+                icon: const Icon(PhosphorIconsRegular.signOut,
+                    size: 18, color: AppEditorial.rust),
+                label: const Text('Keluar dari akun',
+                    style: TextStyle(color: AppEditorial.rust)),
+                style: OutlinedButton.styleFrom(
+                  side:
+                      const BorderSide(color: AppEditorial.rust, width: 1.4),
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
             Center(
               child: Text(
-                'BENSINKU · v1.0.0 · TemanLabs',
-                style: AppEditorial.mono(
-                  fontSize: 10.5,
+                'BensinKu · v1.0.0 · TemanLabs',
+                style: AppEditorial.sans(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
                   color: AppEditorial.inkMuted,
-                  letterSpacing: 0.6,
                 ),
               ),
             ),
@@ -290,18 +321,26 @@ class _VehicleEntry extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
-              color: isLast ? Colors.transparent : AppEditorial.hairline,
+              color: isLast ? Colors.transparent : AppEditorial.hairlineSoft,
               width: 1,
             ),
           ),
         ),
         child: Row(
           children: [
-            SizedBox(
-              width: 60,
-              child: Text(
-                vehicle.type == VehicleType.motor ? 'MOTOR' : 'MOBIL',
-                style: AppEditorial.eyebrow(),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppEditorial.brandTint,
+                borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+              ),
+              child: Icon(
+                vehicle.type == VehicleType.motor
+                    ? PhosphorIconsRegular.motorcycle
+                    : PhosphorIconsRegular.car,
+                size: 22,
+                color: AppEditorial.brandDeep,
               ),
             ),
             const SizedBox(width: 14),
@@ -311,25 +350,26 @@ class _VehicleEntry extends StatelessWidget {
                 children: [
                   Text(
                     vehicle.name,
-                    style: AppEditorial.mono(
+                    style: AppEditorial.heading(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     vehicle.tankCapacityLiters == null
-                        ? 'tanki belum diatur'
-                        : 'tanki ${vehicle.tankCapacityLiters} L',
+                        ? '${vehicle.type.label} · tanki belum diatur'
+                        : '${vehicle.type.label} · tanki ${vehicle.tankCapacityLiters} L',
                     style: AppEditorial.sans(
-                      fontSize: 11.5,
+                      fontSize: 12,
                       color: AppEditorial.inkSoft,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_rounded,
-                color: AppEditorial.ink, size: 16),
+            const Icon(PhosphorIconsRegular.caretRight,
+                color: AppEditorial.inkMuted, size: 20),
           ],
         ),
       ),
@@ -359,25 +399,39 @@ class _PreferencesBlock extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         EditorialSectionHeader(
-          index: '02',
-          label: 'PREFERENSI',
+          label: 'Preferensi',
           trailing: GestureDetector(
             onTap: onEdit,
-            child: Text('EDIT',
-                style:
-                    AppEditorial.eyebrow(color: AppEditorial.ink)),
+            child: Text('Edit',
+                style: AppEditorial.sans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppEditorial.brandDeep)),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         if (!hasPrefs)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text(
-              'belum diatur. isi untuk prediksi yang akurat.',
-              style: AppEditorial.sans(
-                fontSize: 13,
-                color: AppEditorial.inkSoft,
-              ),
+          EditorialCard(
+            onTap: onEdit,
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                const Icon(PhosphorIconsRegular.slidersHorizontal,
+                    size: 20, color: AppEditorial.inkMuted),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Belum diatur. Isi untuk prediksi yang lebih akurat.',
+                    style: AppEditorial.sans(
+                      fontSize: 13,
+                      color: AppEditorial.inkSoft,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+                const Icon(PhosphorIconsRegular.caretRight,
+                    size: 20, color: AppEditorial.inkMuted),
+              ],
             ),
           )
         else
@@ -396,7 +450,7 @@ class _PreferencesBlock extends StatelessWidget {
               if (prefFuelId != null)
                 const EditorialDataRow(
                   label: 'BBM favorit',
-                  value: 'TERPILIH',
+                  value: 'Terpilih',
                 ),
               if (usageProfile != null)
                 EditorialDataRow(
@@ -421,7 +475,10 @@ class _PreferencesBlock extends StatelessWidget {
                 );
               }
             }
-            return Column(children: rows);
+            return EditorialCard(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Column(children: rows),
+            );
           }),
       ],
     );
@@ -461,10 +518,10 @@ class _ErrorBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        border: Border.all(color: AppEditorial.rust, width: 1),
-        borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+        color: AppEditorial.rustSoft,
+        borderRadius: BorderRadius.circular(AppEditorial.rButton),
       ),
       child: Text(
         message,
@@ -559,15 +616,15 @@ class _PreferencesEditPageState extends State<_PreferencesEditPage> {
       backgroundColor: AppEditorial.canvas,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(PhosphorIconsRegular.arrowLeft),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'EDIT PREFERENSI',
-          style: AppEditorial.mono(
-            fontSize: 13,
+          'Edit preferensi',
+          style: AppEditorial.heading(
+            fontSize: 19,
             fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
+            letterSpacing: -0.3,
           ),
         ),
       ),
@@ -594,28 +651,25 @@ class _PreferencesEditPageState extends State<_PreferencesEditPage> {
                     return GestureDetector(
                       onTap: () => setState(() => _preferredFuelId =
                           selected ? null : p.id),
-                      child: Container(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
+                            horizontal: 16, vertical: 11),
                         decoration: BoxDecoration(
                           color: selected
-                              ? AppEditorial.butter
-                              : AppEditorial.canvas,
-                          border: Border.all(
-                            color: selected
-                                ? AppEditorial.ink
-                                : AppEditorial.hairline,
-                            width: 1,
-                          ),
+                              ? AppEditorial.brand
+                              : AppEditorial.canvasSoft,
                           borderRadius:
-                              BorderRadius.circular(AppEditorial.rTiny),
+                              BorderRadius.circular(AppEditorial.rPill),
                         ),
                         child: Text(
                           p.label,
-                          style: AppEditorial.mono(
-                            fontSize: 12,
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w500,
+                          style: AppEditorial.sans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: selected
+                                ? AppEditorial.ink
+                                : AppEditorial.inkSoft,
                           ),
                         ),
                       ),
@@ -717,7 +771,7 @@ class _PreferencesEditPageState extends State<_PreferencesEditPage> {
                           color: AppEditorial.canvas,
                         ),
                       )
-                    : const Text('SIMPAN PREFERENSI →'),
+                    : const Text('Simpan preferensi'),
               ),
             ],
           );
@@ -752,50 +806,48 @@ class _ProfilePicker<T> extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 8),
           child: GestureDetector(
             onTap: () => onChange(selected ? null : opt),
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
               padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
+                  horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
                 color:
-                    selected ? AppEditorial.butter : AppEditorial.canvas,
-                border: Border.all(
-                  color: selected
-                      ? AppEditorial.ink
-                      : AppEditorial.hairline,
-                  width: selected ? 1.5 : 1,
-                ),
+                    selected ? AppEditorial.brand : AppEditorial.canvasSoft,
                 borderRadius:
-                    BorderRadius.circular(AppEditorial.rTiny),
+                    BorderRadius.circular(AppEditorial.rButton),
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 16,
-                    height: 16,
+                    width: 20,
+                    height: 20,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: AppEditorial.ink,
-                        width: 1.2,
+                        color: selected
+                            ? AppEditorial.ink
+                            : AppEditorial.inkMuted,
+                        width: 1.6,
                       ),
                       color: selected
                           ? AppEditorial.ink
-                          : AppEditorial.canvas,
+                          : Colors.transparent,
                     ),
                     child: selected
-                        ? const Icon(Icons.check_rounded,
-                            size: 11, color: AppEditorial.canvas)
+                        ? const Icon(PhosphorIconsRegular.check,
+                            size: 13, color: AppEditorial.brand)
                         : null,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       labelOf(opt),
-                      style: AppEditorial.mono(
+                      style: AppEditorial.sans(
                         fontSize: 14,
                         fontWeight: selected
                             ? FontWeight.w700
-                            : FontWeight.w500,
+                            : FontWeight.w600,
+                        color: AppEditorial.ink,
                       ),
                     ),
                   ),
@@ -814,11 +866,13 @@ class _MenuTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.isLast = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool isLast;
 
   @override
   Widget build(BuildContext context) {
@@ -826,26 +880,39 @@ class _MenuTile extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           border: Border(
-            bottom: BorderSide(color: AppEditorial.hairline, width: 1),
+            bottom: BorderSide(
+              color: isLast
+                  ? Colors.transparent
+                  : AppEditorial.hairlineSoft,
+              width: 1,
+            ),
           ),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: AppEditorial.ink),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppEditorial.canvasSoft,
+                borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+              ),
+              child: Icon(icon, size: 19, color: AppEditorial.ink),
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
                 label,
-                style: AppEditorial.mono(
-                  fontSize: 14,
+                style: AppEditorial.sans(
+                  fontSize: 14.5,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            const Icon(Icons.arrow_forward_rounded,
-                size: 16, color: AppEditorial.inkMuted),
+            const Icon(PhosphorIconsRegular.caretRight,
+                size: 20, color: AppEditorial.inkMuted),
           ],
         ),
       ),

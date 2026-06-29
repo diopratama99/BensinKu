@@ -34,6 +34,94 @@ class FuelEconomyEstimate {
   final int sampleCount;
 }
 
+/// Daily fuel consumption (liters/day) with provenance.
+class ConsumptionEstimate {
+  const ConsumptionEstimate({
+    required this.litersPerDay,
+    required this.source,
+    required this.refuelCount,
+  });
+
+  final double litersPerDay;
+
+  /// 'riwayat isi' (tank-to-tank from purchase history — most accurate),
+  /// 'estimasi jarak' / 'preferensi' / 'profil pakai' / 'default'.
+  final String source;
+
+  /// How many refuels backed this estimate.
+  final int refuelCount;
+}
+
+/// Everything the dashboard needs to render the "kapan isi bensin" card.
+///
+/// Design philosophy (post-rewrite): for a regular commuter the strongest,
+/// least-noisy signal is the *refuel history itself* — dates + liters are
+/// hard transaction data, not stacked estimates. So the forecast leads with
+/// the refill-interval / tank-to-tank consumption and only falls back to the
+/// km/L × daily-km chain during cold start.
+class RefillForecast {
+  const RefillForecast({
+    required this.remainingPct,
+    required this.remainingLiters,
+    required this.litersPerDay,
+    required this.consumptionSource,
+    required this.daysLeft,
+    required this.predictedDate,
+    required this.method,
+    required this.kmPerLiter,
+    required this.efficiencySource,
+    required this.efficiencySampleCount,
+    required this.refuelCount,
+    this.intervalConsistent = false,
+  });
+
+  /// Fraction of tank remaining, 0..1.
+  final double remainingPct;
+  final double remainingLiters;
+
+  /// Consumption rate used for the forecast.
+  final double litersPerDay;
+  final String consumptionSource;
+
+  /// Days until predicted refill (null if not enough data).
+  final double? daysLeft;
+  final DateTime? predictedDate;
+
+  /// Which method produced the date:
+  ///   'pola isi ulang'  — refill-interval (regular pattern; most accurate)
+  ///   'konsumsi harian' — depletion from L/day consumption
+  ///   'estimasi awal'   — cold-start fallback
+  final String method;
+
+  /// km/L — now a secondary *display* figure, no longer the spine of the
+  /// date prediction.
+  final double kmPerLiter;
+  final String efficiencySource;
+  final int efficiencySampleCount;
+
+  /// Number of refuels available — drives the confidence label.
+  final int refuelCount;
+
+  /// True when the refuel intervals are tight enough (low spread) that the
+  /// pattern is trustworthy even with only 3 fills. Lets us show AKURAT
+  /// earlier for genuinely regular commuters instead of waiting for an
+  /// arbitrary count.
+  final bool intervalConsistent;
+
+  /// Honest confidence label for the *forecast* (not the km/L blend):
+  ///   - 'AKURAT'  : pattern-based AND (≥4 fills OR a consistent cadence)
+  ///   - 'BELAJAR' : we have ≥2 fills but the pattern isn't solid yet
+  ///   - 'ESTIMASI': cold start
+  String get confidenceLabel {
+    if (method == 'pola isi ulang' &&
+        (refuelCount >= 4 || (refuelCount >= 3 && intervalConsistent))) {
+      return 'AKURAT';
+    }
+    if (refuelCount >= 2) return 'BELAJAR';
+    return 'ESTIMASI';
+  }
+}
+
 /// Prediction service — encodes the cold-start prior + Bayesian-style update
 /// against measured `EfficiencySample` rows.
 ///
@@ -184,6 +272,225 @@ class PredictionService {
 
     // (4) Fallback
     return const DailyKmEstimate(kmPerDay: 10.0, source: 'default');
+  }
+
+  // ── Consumption (liters/day) from refuel history ──────────────────────
+
+  /// Liters/day derived DIRECTLY from purchase history — the most reliable
+  /// signal for a regular commuter because it's hard transaction data, not
+  /// stacked estimates.
+  ///
+  /// Method: for a user who fills to (roughly) full each time, the liters
+  /// bought between the first and last refuel equals the liters burned in
+  /// that span. So:
+  ///
+  ///   L/day = (Σ liters of all refuels EXCEPT the last) / (days from first
+  ///           refuel to last refuel)
+  ///
+  /// We exclude the last fill because that fuel hasn't been consumed yet —
+  /// it's sitting in the tank now. Needs ≥2 refuels spanning a sensible
+  /// number of days; otherwise returns null so the caller can fall back to
+  /// the km/L × daily-km chain.
+  static ConsumptionEstimate? consumptionFromRefuels(List<Refuel> refuels) {
+    if (refuels.length < 2) return null;
+
+    // Sort oldest → newest (caller usually passes newest-first).
+    final sorted = [...refuels]
+      ..sort((a, b) => a.refuelDate.compareTo(b.refuelDate));
+
+    final first = sorted.first;
+    final last = sorted.last;
+    final spanDays = last.refuelDate.difference(first.refuelDate).inHours /
+        24.0;
+    // Need a meaningful span; <1 day of history is noise.
+    if (spanDays < 1) return null;
+
+    // Liters consumed over the span = everything bought EXCEPT the most
+    // recent fill (that one is still in the tank).
+    final consumedLiters = sorted
+        .take(sorted.length - 1)
+        .fold<double>(0, (s, r) => s + r.liters.toDouble());
+    if (consumedLiters <= 0) return null;
+
+    final perDay = consumedLiters / spanDays;
+    if (!perDay.isFinite || perDay <= 0) return null;
+
+    return ConsumptionEstimate(
+      litersPerDay: perDay,
+      source: 'riwayat isi',
+      refuelCount: sorted.length,
+    );
+  }
+
+  /// Median number of days between consecutive refuels. Captures a weekly
+  /// commuter rhythm (e.g. "selalu ~8 hari sekali") far better than a flat
+  /// daily average. Returns null with <2 refuels.
+  static double? medianRefuelIntervalDays(List<Refuel> refuels) {
+    final gaps = _refuelGaps(refuels);
+    if (gaps.isEmpty) return null;
+
+    gaps.sort();
+    final mid = gaps.length ~/ 2;
+    if (gaps.length.isOdd) return gaps[mid];
+    return (gaps[mid - 1] + gaps[mid]) / 2.0;
+  }
+
+  /// Cleaned day-gaps between consecutive refuels (same-day double-fills and
+  /// absurd >90-day pauses removed).
+  static List<double> _refuelGaps(List<Refuel> refuels) {
+    if (refuels.length < 2) return const [];
+    final sorted = [...refuels]
+      ..sort((a, b) => a.refuelDate.compareTo(b.refuelDate));
+
+    final gaps = <double>[];
+    for (var i = 1; i < sorted.length; i++) {
+      final days =
+          sorted[i].refuelDate.difference(sorted[i - 1].refuelDate).inHours /
+              24.0;
+      if (days >= 0.5 && days <= 90) gaps.add(days);
+    }
+    return gaps;
+  }
+
+  /// Whether the refuel cadence is regular enough to trust the pattern with
+  /// only a few fills. Uses the coefficient of variation (stdev / mean):
+  /// CV ≤ ~0.25 means the gaps cluster tightly (e.g. 8, 8, 7 days), which is
+  /// exactly the steady-commuter case where the date prediction is solid.
+  static bool refuelIntervalIsConsistent(List<Refuel> refuels) {
+    final gaps = _refuelGaps(refuels);
+    if (gaps.length < 2) return false;
+    final mean = gaps.reduce((a, b) => a + b) / gaps.length;
+    if (mean <= 0) return false;
+    final variance = gaps
+            .map((g) => (g - mean) * (g - mean))
+            .reduce((a, b) => a + b) /
+        gaps.length;
+    final cv = math.sqrt(variance) / mean;
+    return cv <= 0.25;
+  }
+
+  /// The headline forecast for the dashboard "kapan isi bensin" card.
+  ///
+  /// Strategy, strongest signal first:
+  ///   1. Refill-interval — if the user refuels on a regular cadence
+  ///      (≥3 refuels), predict next = lastRefuelDate + medianInterval.
+  ///      This mirrors the user's own mental model and is the most robust
+  ///      for routine commuters.
+  ///   2. Daily consumption — deplete the current tank using L/day derived
+  ///      from purchase history (fallback: km/L × daily-km chain).
+  ///   3. Cold-start — prior km/L + preference-based daily km.
+  ///
+  /// `remainingLiters` is computed from the last fill minus consumption
+  /// since (using whichever L/day source we trust most), unless a fuel-gauge
+  /// reading is provided in the future.
+  static RefillForecast forecastRefill({
+    required Vehicle vehicle,
+    required List<Refuel> refuels,
+    required List<Trip> trips,
+    required List<EfficiencySample> samples,
+    PrimaryCity? primaryCity,
+    UsageProfile? usageProfile,
+    num? weeklyKmPref,
+  }) {
+    // km/L still computed for display + as a fallback consumption source.
+    final eff = posteriorKmPerLiter(
+      vehicle: vehicle,
+      samples: samples,
+      primaryCity: primaryCity,
+      usageProfile: usageProfile,
+    );
+
+    // ── Consumption rate (L/day) ──
+    // Prefer purchase-history consumption (hard data). Otherwise derive
+    // from the km/L × daily-km chain (estimate-on-estimate, less reliable).
+    final fromHistory = consumptionFromRefuels(refuels);
+    final dailyKm = dailyKmEstimate(
+      recentTrips: trips,
+      weeklyKmPref: weeklyKmPref,
+      usageProfile: usageProfile,
+    );
+    final chainLitersPerDay =
+        eff.kmPerLiter > 0 ? dailyKm.kmPerDay / eff.kmPerLiter : 0.0;
+
+    final double litersPerDay;
+    final String consumptionSource;
+    if (fromHistory != null) {
+      litersPerDay = fromHistory.litersPerDay;
+      consumptionSource = fromHistory.source;
+    } else {
+      litersPerDay = chainLitersPerDay;
+      consumptionSource = 'estimasi jarak';
+    }
+
+    // ── Remaining fuel ──
+    final lastRefuel = refuels.isNotEmpty
+        ? (refuels.first.refuelDate.isAfter(refuels.last.refuelDate)
+            ? refuels.first
+            : refuels.last)
+        : null;
+    final tankCap = vehicle.tankCapacityLiters?.toDouble();
+
+    double remainingLiters;
+    double remainingPct;
+    if (lastRefuel != null) {
+      final daysSinceLast =
+          DateTime.now().difference(lastRefuel.refuelDate).inHours / 24.0;
+      final consumedSince =
+          (litersPerDay > 0 ? litersPerDay * daysSinceLast : 0.0);
+      final startLiters = lastRefuel.liters.toDouble();
+      remainingLiters =
+          (startLiters - consumedSince).clamp(0.0, startLiters);
+      final denom = lastRefuel.isFullTank && tankCap != null && tankCap > 0
+          ? tankCap
+          : startLiters;
+      remainingPct =
+          denom > 0 ? (remainingLiters / denom).clamp(0.0, 1.0) : 0.0;
+    } else {
+      remainingLiters = (tankCap ?? 0) * 0.9;
+      remainingPct = 0.9;
+    }
+
+    // ── Predicted refill date ──
+    double? daysLeft;
+    DateTime? predictedDate;
+    String method;
+
+    final interval = medianRefuelIntervalDays(refuels);
+    if (interval != null && refuels.length >= 3 && lastRefuel != null) {
+      // Regular cadence — predict from the rhythm itself.
+      predictedDate =
+          lastRefuel.refuelDate.add(Duration(hours: (interval * 24).round()));
+      daysLeft =
+          predictedDate.difference(DateTime.now()).inHours / 24.0;
+      // A past/!future prediction means we're overdue — clamp to 0.
+      if (daysLeft < 0) daysLeft = 0;
+      method = 'pola isi ulang';
+    } else if (litersPerDay > 0 && remainingLiters > 0) {
+      // Deplete current tank by consumption rate.
+      daysLeft = remainingLiters / litersPerDay;
+      predictedDate =
+          DateTime.now().add(Duration(hours: (daysLeft * 24).round()));
+      method = consumptionSource == 'riwayat isi'
+          ? 'konsumsi harian'
+          : 'estimasi awal';
+    } else {
+      method = 'estimasi awal';
+    }
+
+    return RefillForecast(
+      remainingPct: remainingPct,
+      remainingLiters: remainingLiters,
+      litersPerDay: litersPerDay,
+      consumptionSource: consumptionSource,
+      daysLeft: daysLeft,
+      predictedDate: predictedDate,
+      method: method,
+      kmPerLiter: eff.kmPerLiter,
+      efficiencySource: eff.source,
+      efficiencySampleCount: eff.sampleCount,
+      refuelCount: refuels.length,
+      intervalConsistent: refuelIntervalIsConsistent(refuels),
+    );
   }
 
   // ── Base km/L by vehicle ──────────────────────────────────────────────

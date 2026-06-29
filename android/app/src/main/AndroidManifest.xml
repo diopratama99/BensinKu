@@ -24,6 +24,17 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Bluetooth thermal printer (struk). Legacy perms for API <= 30, and
+         the runtime BLUETOOTH_CONNECT/SCAN for API 31+ (Android 12). SCAN is
+         flagged neverForLocation so we don't also need location on 12+. -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
     <application
         android:label="BensinKu"
         android:name="${applicationName}"
