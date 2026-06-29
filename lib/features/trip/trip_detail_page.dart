@@ -9,6 +9,7 @@ import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../services/prediction_service.dart';
+import 'map_style.dart';
 
 class TripDetailPage extends StatefulWidget {
   const TripDetailPage({super.key, required this.trip});
@@ -268,12 +269,7 @@ class _TripDetailPageState extends State<TripDetailPage>
                               initialZoom: 14,
                             ),
                             children: [
-                              TileLayer(
-                                urlTemplate:
-                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName:
-                                    'com.temanlabs.bensinku',
-                              ),
+                              warmMapTiles(),
                               if (latLngs.length >= 2)
                                 AnimatedBuilder(
                                   animation: _route,
@@ -325,6 +321,7 @@ class _TripDetailPageState extends State<TripDetailPage>
                                   );
                                 },
                               ),
+                              mapAttribution(),
                             ],
                           ),
               ),

@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
+import 'map_style.dart';
 import '../../services/notification_service.dart';
 import '../../services/trip_service.dart';
 import '../../services/widget_launch_intent.dart';
@@ -632,12 +633,7 @@ class _TripMapScreenState extends State<TripMapScreen>
               initialZoom: 15,
             ),
             children: [
-              TileLayer(
-                urlTemplate:
-                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.temanlabs.bensinku',
-                maxZoom: 19,
-              ),
+              warmMapTiles(),
               if (polylinePoints.length >= 2)
                 PolylineLayer(
                   polylines: [
@@ -691,6 +687,7 @@ class _TripMapScreenState extends State<TripMapScreen>
                     ),
                   ],
                 ),
+              mapAttribution(),
             ],
           ),
 
