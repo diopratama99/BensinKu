@@ -31,13 +31,10 @@ class RefuelDetailPage extends StatefulWidget {
   State<RefuelDetailPage> createState() => _RefuelDetailPageState();
 }
 
-class _RefuelDetailPageState extends State<RefuelDetailPage>
-    with SingleTickerProviderStateMixin {
+class _RefuelDetailPageState extends State<RefuelDetailPage> {
   final _repo = SupabaseRepository.ofDefaultClient();
   late Refuel refuel;
   bool _changed = false;
-
-  late final AnimationController _print;
 
   final _rupiah =
       NumberFormat.currency(locale: 'id_ID', symbol: '', decimalDigits: 0);
@@ -46,24 +43,6 @@ class _RefuelDetailPageState extends State<RefuelDetailPage>
   void initState() {
     super.initState();
     refuel = widget.refuel;
-    _print = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    );
-    // Mulai "ngeprint" setelah frame pertama.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _print.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _print.dispose();
-    super.dispose();
-  }
-
-  void _reprint() {
-    _print.forward(from: 0);
   }
 
   String get _shortId {
@@ -91,8 +70,6 @@ class _RefuelDetailPageState extends State<RefuelDetailPage>
   }
 
   Future<void> _openPrintSheet() async {
-    // Replay animasi "ngeprint" sebagai feedback visual.
-    _reprint();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -114,7 +91,6 @@ class _RefuelDetailPageState extends State<RefuelDetailPage>
         refuel = result;
         _changed = true;
       });
-      _reprint();
     }
   }
 
@@ -194,33 +170,18 @@ class _RefuelDetailPageState extends State<RefuelDetailPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Struk yang muncul "ter-print" saat halaman dibuka.
-                AnimatedBuilder(
-                  animation: _print,
-                  builder: (context, child) {
-                    final t = Curves.easeOutCubic.transform(_print.value);
-                    return Align(
-                      alignment: Alignment.topCenter,
-                      heightFactor: t.clamp(0.0001, 1.0),
-                      child: Opacity(
-                        opacity: t.clamp(0.0, 1.0),
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: _Receipt(
-                    dateLabel: DateFormat('EEEE, dd MMM yyyy', 'id_ID')
-                        .format(refuel.refuelDate),
-                    trxId: refuel.id,
-                    vehicleText: vehicleText,
-                    productText: productText,
-                    liters: refuel.liters,
-                    pricePerLiter: refuel.pricePerLiterSnapshot,
-                    totalRp: refuel.totalRp,
-                    isFullTank: refuel.isFullTank,
-                    odometerKm: refuel.odometerKm,
-                    rupiah: _rupiah,
-                  ),
+                _Receipt(
+                  dateLabel: DateFormat('EEEE, dd MMM yyyy', 'id_ID')
+                      .format(refuel.refuelDate),
+                  trxId: refuel.id,
+                  vehicleText: vehicleText,
+                  productText: productText,
+                  liters: refuel.liters,
+                  pricePerLiter: refuel.pricePerLiterSnapshot,
+                  totalRp: refuel.totalRp,
+                  isFullTank: refuel.isFullTank,
+                  odometerKm: refuel.odometerKm,
+                  rupiah: _rupiah,
                 ),
                 const SizedBox(height: 22),
                 Center(

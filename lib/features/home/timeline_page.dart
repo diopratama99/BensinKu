@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../app/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
+import '../../services/report_print_service.dart';
+import '../../services/route_map_image.dart';
 import '../trip/trip_detail_page.dart';
 import 'refuel_detail_page.dart';
 
@@ -72,6 +75,167 @@ class _TimelinePageState extends State<TimelinePage> {
     } catch (e) {
       setState(() { _error = e.toString(); _loading = false; });
     }
+  }
+
+  void _openReportSheet() {
+    if (_refuels.isEmpty && _trips.isEmpty && _maint.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Belum ada data untuk dilaporkan.')),
+      );
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppEditorial.canvas,
+      builder: (_) => _ReportSheet(
+        refuels: _refuels,
+        vehicles: _vehicles,
+        rupiah: _rupiah,
+        onAll: () {
+          Navigator.of(context).pop();
+          _printAll();
+        },
+        onPeriod: (r) {
+          Navigator.of(context).pop();
+          _printPeriod(r);
+        },
+      ),
+    );
+  }
+
+  Future<void> _printAll() async {
+    final scope = _vehicleFilter == null
+        ? 'Semua kendaraan'
+        : () {
+            final v = _vehicles.where((e) => e.id == _vehicleFilter);
+            return v.isEmpty
+                ? 'Semua kendaraan'
+                : '${v.first.type.label} · ${v.first.name}';
+          }();
+    try {
+      await ReportPrintService.printReport(
+        vehicles: _vehicleFilter == null
+            ? _vehicles
+            : _vehicles.where((e) => e.id == _vehicleFilter).toList(),
+        refuels: _refuels,
+        trips: _trips,
+        maint: _maint,
+        scopeLabel: scope,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal buat laporan: $e')),
+        );
+      }
+    }
+  }
+
+  /// Laporan satu periode: dari pengisian [anchor] sampai sebelum pengisian
+  /// berikutnya (kendaraan yang sama).
+  Future<void> _printPeriod(Refuel anchor) async {
+    // Pengisian berikutnya untuk kendaraan yang sama.
+    final sameVehicle = _refuels
+        .where((r) => r.vehicleId == anchor.vehicleId)
+        .toList()
+      ..sort((a, b) => a.refuelDate.compareTo(b.refuelDate));
+    final idx = sameVehicle.indexWhere((r) => r.id == anchor.id);
+    final next = (idx >= 0 && idx < sameVehicle.length - 1)
+        ? sameVehicle[idx + 1]
+        : null;
+    final periodIndex = idx >= 0 ? idx + 1 : null;
+
+    final start = anchor.refuelDate;
+    final end = next?.refuelDate ?? DateTime.now();
+
+    final vehicle = _vehicles.firstWhere(
+      (v) => v.id == anchor.vehicleId,
+      orElse: () => _vehicles.isNotEmpty
+          ? _vehicles.first
+          : throw StateError('no vehicle'),
+    );
+
+    // Trip dalam jendela periode (kendaraan sama).
+    final windowTrips = _trips
+        .where((t) =>
+            t.vehicleId == anchor.vehicleId &&
+            !t.startedAt.isBefore(start) &&
+            t.startedAt.isBefore(end.add(const Duration(seconds: 1))))
+        .toList()
+      ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
+
+    final windowMaint = _maint
+        .where((m) =>
+            m.vehicleId == anchor.vehicleId &&
+            !m.lastServiceDate.isBefore(start) &&
+            m.lastServiceDate.isBefore(end.add(const Duration(seconds: 1))))
+        .toList();
+
+    _showBusy('Menyiapkan laporan & peta rute…');
+    try {
+      // Ambil waypoint tiap trip → segmen rute.
+      final segments = <List<LatLng>>[];
+      for (final t in windowTrips) {
+        final wps = await _repo.getTripWaypoints(t.id);
+        if (wps.length >= 2) {
+          segments.add(wps.map((w) => LatLng(w.lat, w.lng)).toList());
+        }
+      }
+
+      final mapPng = segments.isEmpty
+          ? null
+          : await RouteMapImage.build(segments);
+
+      if (mounted) Navigator.of(context, rootNavigator: true).pop(); // tutup busy
+
+      await ReportPrintService.printPeriodReport(
+        vehicle: vehicle,
+        anchor: anchor,
+        next: next,
+        trips: windowTrips,
+        maint: windowMaint,
+        mapPng: mapPng,
+        periodIndex: periodIndex,
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal buat laporan: $e')),
+        );
+      }
+    }
+  }
+
+  void _showBusy(String msg) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        backgroundColor: AppEditorial.cream,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.4, color: AppEditorial.ink),
+              ),
+              const SizedBox(width: 16),
+              Flexible(
+                child: Text(msg,
+                    style: AppEditorial.sans(
+                        fontSize: 13.5, color: AppEditorial.ink)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -149,6 +313,8 @@ class _TimelinePageState extends State<TimelinePage> {
                     letterSpacing: -0.3,
                   ),
                 ),
+                const Spacer(),
+                _ReportButton(onTap: _openReportSheet),
               ],
             ),
           ),
@@ -359,6 +525,392 @@ class _TimelinePageState extends State<TimelinePage> {
                   fontSize: 13, color: AppEditorial.inkMuted)),
         ),
       );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tombol cetak laporan
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ReportButton extends StatelessWidget {
+  const _ReportButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppEditorial.ink,
+      borderRadius: BorderRadius.circular(AppEditorial.rPill),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppEditorial.rPill),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(PhosphorIconsRegular.printer,
+                  size: 16, color: Color(0xFFFFFFFF)),
+              const SizedBox(width: 6),
+              Text(
+                'Laporan',
+                style: AppEditorial.heading(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFFFFFFF),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sheet pilih laporan — semua data atau per periode pengisian
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ReportSheet extends StatefulWidget {
+  const _ReportSheet({
+    required this.refuels,
+    required this.vehicles,
+    required this.rupiah,
+    required this.onAll,
+    required this.onPeriod,
+  });
+  final List<Refuel> refuels;
+  final List<Vehicle> vehicles;
+  final NumberFormat rupiah;
+  final VoidCallback onAll;
+  final ValueChanged<Refuel> onPeriod;
+
+  @override
+  State<_ReportSheet> createState() => _ReportSheetState();
+}
+
+class _ReportSheetState extends State<_ReportSheet> {
+  static final _dayFmt = DateFormat('d MMM yyyy', 'id_ID');
+  static final _monthFmt = DateFormat('MMMM yyyy', 'id_ID');
+
+  late final List<_PeriodItem> _periods;
+  late final List<DateTime> _months; // unik per (tahun, bulan), terbaru dulu
+  DateTime? _month; // null = semua bulan
+
+  @override
+  void initState() {
+    super.initState();
+    final byId = {for (final v in widget.vehicles) v.id: v};
+
+    final byVehicle = <String, List<Refuel>>{};
+    for (final r in widget.refuels) {
+      byVehicle.putIfAbsent(r.vehicleId, () => []).add(r);
+    }
+    for (final l in byVehicle.values) {
+      l.sort((a, b) => a.refuelDate.compareTo(b.refuelDate));
+    }
+
+    final periods = <_PeriodItem>[];
+    byVehicle.forEach((vid, list) {
+      for (var i = 0; i < list.length; i++) {
+        final r = list[i];
+        final next = i < list.length - 1 ? list[i + 1] : null;
+        periods.add(_PeriodItem(
+          refuel: r,
+          index: i + 1,
+          startLabel: _dayFmt.format(r.refuelDate),
+          endLabel: next == null ? 'sekarang' : _dayFmt.format(next.refuelDate),
+          vehicleLabel: byId[vid] == null
+              ? ''
+              : '${byId[vid]!.type.label} · ${byId[vid]!.name}',
+        ));
+      }
+    });
+    periods.sort((a, b) => b.refuel.refuelDate.compareTo(a.refuel.refuelDate));
+    _periods = periods;
+
+    final monthSet = <String, DateTime>{};
+    for (final p in periods) {
+      final d = p.refuel.refuelDate;
+      monthSet['${d.year}-${d.month}'] = DateTime(d.year, d.month);
+    }
+    _months = monthSet.values.toList()..sort((a, b) => b.compareTo(a));
+    _month = _months.isNotEmpty ? _months.first : null;
+  }
+
+  List<_PeriodItem> get _filtered {
+    if (_month == null) return _periods;
+    return _periods
+        .where((p) =>
+            p.refuel.refuelDate.year == _month!.year &&
+            p.refuel.refuelDate.month == _month!.month)
+        .toList();
+  }
+
+  Future<void> _pickMonth() async {
+    final picked = await showModalBottomSheet<DateTime?>(
+      context: context,
+      backgroundColor: AppEditorial.canvas,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Pilih Bulan',
+                    style: AppEditorial.heading(fontSize: 16)),
+              ),
+            ),
+            _monthRow('Semua bulan', _kAll),
+            for (final m in _months) _monthRow(_monthFmt.format(m), m),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return; // ditutup tanpa memilih
+    setState(() => _month = identical(picked, _kAll) ? null : picked);
+  }
+
+  // Sentinel untuk opsi "Semua bulan" (≠ dismiss yang mengembalikan null).
+  static final DateTime _kAll = DateTime.fromMillisecondsSinceEpoch(0);
+
+  Widget _monthRow(String label, DateTime value) {
+    final isAll = identical(value, _kAll);
+    final selected = isAll
+        ? _month == null
+        : (_month != null &&
+            value.year == _month!.year &&
+            value.month == _month!.month);
+    return InkWell(
+      onTap: () => Navigator.of(context).pop(value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(label,
+                  style: AppEditorial.heading(
+                      fontSize: 14.5, fontWeight: FontWeight.w600)),
+            ),
+            if (selected)
+              const Icon(PhosphorIconsFill.checkCircle,
+                  size: 20, color: AppEditorial.ink),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered;
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.72,
+      maxChildSize: 0.92,
+      minChildSize: 0.5,
+      builder: (context, scrollController) {
+        return SafeArea(
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppEditorial.hairline,
+                    borderRadius: BorderRadius.circular(AppEditorial.rPill),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Cetak Laporan',
+                      style: AppEditorial.heading(fontSize: 17)),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                  children: [
+                    _ReportTile(
+                      icon: PhosphorIconsRegular.stack,
+                      title: 'Semua data',
+                      subtitle:
+                          'Ringkasan, konsumsi, & linimasa seluruh periode',
+                      onTap: widget.onAll,
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Text('PER PERIODE PENGISIAN',
+                            style: AppEditorial.eyebrow(
+                                color: AppEditorial.inkMuted)),
+                        const Spacer(),
+                        if (_months.isNotEmpty) _monthDropdown(),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Laporan + peta rute dari satu kali isi BBM sampai isi berikutnya.',
+                      style: AppEditorial.sans(
+                          fontSize: 12, color: AppEditorial.inkMuted),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_periods.isEmpty)
+                      Text('Belum ada pengisian.',
+                          style: AppEditorial.sans(
+                              fontSize: 13, color: AppEditorial.inkSoft))
+                    else if (filtered.isEmpty)
+                      Text('Tidak ada pengisian di bulan ini.',
+                          style: AppEditorial.sans(
+                              fontSize: 13, color: AppEditorial.inkSoft))
+                    else
+                      for (final p in filtered) ...[
+                        _ReportTile(
+                          icon: PhosphorIconsRegular.gasPump,
+                          title:
+                              'Periode #${p.index} · ${p.startLabel} → ${p.endLabel}',
+                          subtitle: [
+                            'Rp ${widget.rupiah.format(p.refuel.totalRp).trim()}',
+                            '${p.refuel.liters.toStringAsFixed(2)} L',
+                            if (widget.vehicles.length > 1) p.vehicleLabel,
+                          ].join(' · '),
+                          onTap: () => widget.onPeriod(p.refuel),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _monthDropdown() {
+    return GestureDetector(
+      onTap: _pickMonth,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: AppEditorial.cream,
+          borderRadius: BorderRadius.circular(AppEditorial.rPill),
+          border: Border.all(color: AppEditorial.hairline, width: 1.2),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(PhosphorIconsRegular.calendarBlank,
+                size: 14, color: AppEditorial.inkSoft),
+            const SizedBox(width: 6),
+            Text(
+              _month == null ? 'Semua bulan' : _monthFmt.format(_month!),
+              style: AppEditorial.sans(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppEditorial.ink),
+            ),
+            const SizedBox(width: 4),
+            const Icon(PhosphorIconsRegular.caretDown,
+                size: 13, color: AppEditorial.inkMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PeriodItem {
+  _PeriodItem({
+    required this.refuel,
+    required this.index,
+    required this.startLabel,
+    required this.endLabel,
+    required this.vehicleLabel,
+  });
+  final Refuel refuel;
+  final int index;
+  final String startLabel;
+  final String endLabel;
+  final String vehicleLabel;
+}
+
+class _ReportTile extends StatelessWidget {
+  const _ReportTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String title, subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppEditorial.cream,
+      borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppEditorial.rTiny),
+            border: Border.all(color: AppEditorial.hairline, width: 1),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppEditorial.brandSoft,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, size: 19, color: AppEditorial.brandDeep),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: AppEditorial.heading(
+                            fontSize: 13.5, fontWeight: FontWeight.w700),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        style: AppEditorial.sans(
+                            fontSize: 11.5, color: AppEditorial.inkMuted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(PhosphorIconsRegular.caretRight,
+                  size: 18, color: AppEditorial.inkMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
